@@ -2747,9 +2747,15 @@ function updateUserUI() {
         setDisp(userInfo, 'flex');
         setDisp(loginPrompt, 'none');
         
-        // Show just the display name (no avatar or initials)
+        // Show display name with initials avatar (two letters)
         const displayName = (oauthUserInfo && oauthUserInfo.name) ? oauthUserInfo.name : currentUser;
-        currentUserName.textContent = displayName;
+        const initials = (displayName || '').trim().split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase();
+        currentUserName.innerHTML = `
+            <span class="oauth-user-info">
+                <span class="user-initials-avatar">${initials}</span>
+                <span class="user-display-name">${displayName}</span>
+            </span>
+        `;
         
         setDisp(userFavoritesToggle, 'flex');
         updateUserFavoritesCount();
