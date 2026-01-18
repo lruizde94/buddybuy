@@ -2194,20 +2194,7 @@ const HOST = '0.0.0.0'; // Escuchar en todas las interfaces de red
 const localIP = getLocalIP();
 
 server.listen(PORT, HOST, () => {
-    console.log(`
-╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║   🛒 BuddyBuy - Servidor Local                            ║
-║                                                           ║
-║   📍 Local:    http://localhost:${PORT}                      ║
-║   📡 Red LAN:  http://${localIP}:${PORT}                    ║
-║                                                           ║
-║   Presiona Ctrl+C para detener el servidor                ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
-    `);
-    
-    console.log('🤖 Usando OpenAI API (GPT-4o-mini)');
+    console.log(`Servidor arrancado: http://localhost:${PORT} (LAN: http://${localIP}:${PORT})`);
     
     if (!productosCache) {
         console.log('\n⚠️  No hay datos locales. Ejecuta: node sync-productos.js\n');

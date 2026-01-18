@@ -2614,18 +2614,36 @@ function updateUserUI() {
         userFavoritesToggle.style.display = 'flex';
         updateUserFavoritesCount();
         // Enable global actions for logged users
-        if (ticketToggle) ticketToggle.onclick = () => showTicketModal();
-        if (shoppingListToggle) shoppingListToggle.onclick = () => showShoppingListModal();
-        if (favoritesToggle) favoritesToggle.onclick = () => showFavoritesModal();
+        if (ticketToggle) {
+            ticketToggle.style.display = 'flex';
+            ticketToggle.onclick = () => showTicketModal();
+        }
+        if (shoppingListToggle) {
+            shoppingListToggle.style.display = 'flex';
+            shoppingListToggle.onclick = () => showShoppingListModal();
+        }
+        if (favoritesToggle) {
+            favoritesToggle.style.display = 'flex';
+            favoritesToggle.onclick = () => showFavoritesModal();
+        }
         if (generateMenu) generateMenu.removeAttribute('disabled');
     } else {
         userInfo.style.display = 'none';
         loginPrompt.style.display = 'flex';
         userFavoritesToggle.style.display = 'none';
-        // Disable actions for anonymous users
-        if (ticketToggle) ticketToggle.onclick = () => showLoginModal();
-        if (shoppingListToggle) shoppingListToggle.onclick = () => showLoginModal();
-        if (favoritesToggle) favoritesToggle.onclick = () => showLoginModal();
+        // Hide/disable actions for anonymous users
+        if (ticketToggle) {
+            ticketToggle.style.display = 'none';
+            ticketToggle.onclick = null;
+        }
+        if (shoppingListToggle) {
+            shoppingListToggle.style.display = 'none';
+            shoppingListToggle.onclick = null;
+        }
+        if (favoritesToggle) {
+            favoritesToggle.style.display = 'none';
+            favoritesToggle.onclick = null;
+        }
         if (generateMenu) generateMenu.setAttribute('disabled', 'true');
     }
 }
