@@ -2009,16 +2009,34 @@ async function applyFrecuentes() {
         const pid = String(p.id || p.productId || p.name);
         if (shoppingList.some(item => String(item.id) === pid)) continue;
 
-        const price = parseFloat(p.price || p.unit_price || p.price_instructions?.unit_price || 0) || 0;
+        // Try to enrich using currentProducts (live product DB) to get thumbnail/price
+        let thumbnail = p.thumbnail || '';
+        let price = parseFloat(p.price || p.unit_price || 0) || 0;
+        let packaging = p.packaging || '';
+        let isWeight = Boolean(p.isWeight || (p.price_instructions && p.price_instructions.selling_method === 2));
+
+        try {
+            const match = currentProducts.find(cp => String(cp.id) === String(pid) || normalizeText(cp.display_name || cp.nombre || '') === normalizeText(p.name || p.display_name || ''));
+            if (match) {
+                thumbnail = thumbnail || match.thumbnail || match.imagen || '';
+                const priceInfo = match.price_instructions || {};
+                price = price || priceInfo.unit_price || 0;
+                packaging = packaging || match.packaging || '';
+                isWeight = isWeight || (priceInfo.selling_method === 2);
+            }
+        } catch (e) {
+            // ignore lookup errors
+        }
+
         shoppingList.push({
             id: pid,
             name: p.name || p.display_name || p.product_name || pid,
             quantity: 1,
             checked: false,
-            thumbnail: p.thumbnail || '',
+            thumbnail: thumbnail,
             price: price,
-            isWeight: Boolean(p.isWeight || (p.price_instructions && p.price_instructions.selling_method === 2)),
-            packaging: p.packaging || ''
+            isWeight: isWeight,
+            packaging: packaging
         });
         added++;
     }
