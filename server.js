@@ -93,6 +93,22 @@ async function parsePDF(buffer) {
     }
 }
 
+// Normalize text for search: remove diacritics and lowercase
+function normalizeSearch(str) {
+    if (!str) return '';
+    try {
+        return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    } catch (e) {
+        return str.replace(/[áàäâÁÀÄÂ]/g,'a')
+                  .replace(/[éèëêÉÈËÊ]/g,'e')
+                  .replace(/[íìïîÍÌÏÎ]/g,'i')
+                  .replace(/[óòöôÓÒÖÔ]/g,'o')
+                  .replace(/[úùüûÚÙÜÛ]/g,'u')
+                  .replace(/[ñÑ]/g,'n')
+                  .toLowerCase();
+    }
+}
+
 const PORT = process.env.PORT || 3000;
 const MERCADONA_API = 'tienda.mercadona.es';
 
@@ -1278,16 +1294,18 @@ const server = http.createServer((req, res) => {
     // API local - Búsqueda de productos
     if (req.url.startsWith('/api/search?') && productosCache) {
         const urlParams = new URLSearchParams(req.url.split('?')[1]);
-        const query = urlParams.get('query')?.toLowerCase() || '';
-        
-        if (query.length < 2) {
+        const rawQuery = urlParams.get('query') || '';
+        const query = rawQuery.trim();
+        const qnorm = normalizeSearch(query);
+
+        if (qnorm.length < 2) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ results: [] }));
             return;
         }
-        
+
         const results = productosCache.productos
-            .filter(p => p.nombre.toLowerCase().includes(query))
+            .filter(p => normalizeSearch(p.nombre || '').includes(qnorm))
             .slice(0, 20)
             .map(p => ({
                 id: p.id,

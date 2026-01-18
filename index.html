@@ -102,10 +102,11 @@
 
     <!-- Ingredients Panel (floating) -->
     <div class="ingredients-panel" id="ingredientsPanel">
-        <div class="ingredients-header">
-            <h3>🥗 Mis Ingredientes</h3>
-            <span class="ingredients-count" id="ingredientsCount">0</span>
-        </div>
+        <div class="ingredients-header" role="button" aria-expanded="false">
+                <h3>🥗 Mis Ingredientes</h3>
+                <div class="ingredients-collapsed-icons" id="ingredientsCollapsedIcons" aria-hidden="true"></div>
+                <span class="ingredients-count" id="ingredientsCount">0</span>
+            </div>
         <div class="ingredients-list" id="ingredientsList">
             <p class="empty-ingredients">Haz clic en "+ Añadir" en los productos para agregar ingredientes</p>
         </div>
@@ -260,23 +261,14 @@
                 </div>
                 <div class="ticket-options">
                     <h4>¿Qué quieres hacer?</h4>
-                    <div class="option-buttons option-buttons-3">
-                        <button class="btn-option" id="btnRecipes" onclick="selectTicketOption('recipes')">
-                            <span>🍳</span>
-                            <span>Recetas Rápidas</span>
-                            <small>5 recetas variadas</small>
-                        </button>
-                        <button class="btn-option" id="btnWeeklyMenu" onclick="selectTicketOption('weekly')">
-                            <span>📅</span>
-                            <span>Menú Semanal</span>
-                            <small>7 días planificados</small>
-                        </button>
-                        <button class="btn-option" id="btnFindProducts" onclick="selectTicketOption('products')">
+                    <div class="option-buttons">
+                        <button class="btn-option selected" id="btnFindProducts">
                             <span>❤️</span>
                             <span>Buscar Productos</span>
                             <small>Añadir a favoritos</small>
                         </button>
                     </div>
+                    <p class="note" style="margin-top:8px; color: var(--text-muted); font-size:0.9rem;">La generación de recetas y menús se realiza desde la sección <strong>Generar recetas</strong> usando tus ingredientes seleccionados.</p>
                 </div>
                 <button class="btn-process-ticket" id="processTicketBtn" onclick="processTicket()" disabled>
                     ✨ Procesar Ticket

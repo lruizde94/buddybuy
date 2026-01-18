@@ -42,6 +42,8 @@ const clearIngredients = document.getElementById('clearIngredients');
 const generateMenu = document.getElementById('generateMenu');
 const ingredientsToggle = document.getElementById('ingredientsToggle');
 const toggleCount = document.getElementById('toggleCount');
+const ingredientsCollapsedIcons = document.getElementById('ingredientsCollapsedIcons');
+let ingredientsCollapsed = true; // default: show compact icon
 
 // Menu Modal Elements
 const menuModal = document.getElementById('menuModal');
@@ -93,6 +95,23 @@ function getIcon(categoryName) {
         }
     }
     return categoryIcons.default;
+}
+
+// Normaliza texto para búsqueda: pasa a minúsculas y elimina acentos/diacríticos
+function normalizeText(str) {
+    if (!str) return '';
+    try {
+        return str.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+    } catch (e) {
+        // Fallback for older environments: basic accent replacements
+        return str.replace(/[áàäâÁÀÄÂ]/g,'a')
+                  .replace(/[éèëêÉÈËÊ]/g,'e')
+                  .replace(/[íìïîÍÌÏÎ]/g,'i')
+                  .replace(/[óòöôÓÒÖÔ]/g,'o')
+                  .replace(/[úùüûÚÙÜÛ]/g,'u')
+                  .replace(/[ñÑ]/g,'n')
+                  .toLowerCase();
+    }
 }
 
 function formatPrice(price) {
@@ -411,13 +430,13 @@ async function searchProducts(query) {
         categoryTitle.textContent = 'Resultados de búsqueda';
         return;
     }
-
     showLoading();
     categoryTitle.textContent = `Buscando: "${query}"`;
 
     // Fetch all categories and search through products
     const categories = await fetchCategories();
     let allProducts = [];
+    const qnorm = normalizeText(query);
 
     for (const category of categories) {
         for (const subcategory of (category.categories || [])) {
@@ -425,7 +444,8 @@ async function searchProducts(query) {
             for (const cat of subcatData) {
                 if (cat.products) {
                     for (const product of cat.products) {
-                        if (product.display_name.toLowerCase().includes(query.toLowerCase())) {
+                        const nameNorm = normalizeText(product.display_name || product.nombre || '');
+                        if (nameNorm.includes(qnorm)) {
                             allProducts.push({
                                 ...product,
                                 categoryL1: category.name,
@@ -459,9 +479,11 @@ function performQuickSearch(query) {
         return;
     }
 
-    const filtered = currentProducts.filter(p => 
-        p.display_name.toLowerCase().includes(query.toLowerCase())
-    );
+    const qnorm = normalizeText(query);
+    const filtered = currentProducts.filter(p => {
+        const name = p.display_name || p.nombre || '';
+        return normalizeText(name).includes(qnorm);
+    });
     
     categoryTitle.textContent = `Filtrando: "${query}"`;
     renderProducts(filtered);
@@ -556,6 +578,19 @@ function setupEventListeners() {
     ingredientsToggle.addEventListener('click', toggleIngredientsPanel);
     clearIngredients.addEventListener('click', clearAllIngredients);
     generateMenu.addEventListener('click', generateMenuRequest);
+        // Clicking header toggles collapsed/expanded state
+        const ingredientsHeader = document.querySelector('.ingredients-header');
+        if (ingredientsHeader) {
+            ingredientsHeader.addEventListener('click', (e) => {
+                // Avoid toggling when clicking the remove buttons inside
+                if (e.target.classList && e.target.classList.contains('ingredient-remove')) return;
+                ingredientsCollapsed = !ingredientsCollapsed;
+                ingredientsPanel.classList.toggle('collapsed', ingredientsCollapsed);
+                ingredientsHeader.setAttribute('aria-expanded', (!ingredientsCollapsed).toString());
+            });
+        }
+        // Apply initial collapsed state
+        ingredientsPanel.classList.toggle('collapsed', ingredientsCollapsed);
     menuModalClose.addEventListener('click', closeMenuModal);
     menuModal.addEventListener('click', (e) => {
         if (e.target === menuModal) {
@@ -580,16 +615,30 @@ function addIngredient(product) {
 
     updateIngredientsUI();
     showIngredientsPanel();
+    // Auto-collapse to icon after adding to avoid covering UI
+    ingredientsCollapsed = true;
+    ingredientsPanel.classList.add('collapsed');
+    ingredientsToggle.classList.add('hidden');
 }
 
 function removeIngredient(productId) {
     selectedIngredients = selectedIngredients.filter(i => i.id !== productId);
     updateIngredientsUI();
+    // If no ingredients left, expand panel back to normal and show toggle
+    if (selectedIngredients.length === 0) {
+        ingredientsCollapsed = false;
+        ingredientsPanel.classList.remove('collapsed');
+        ingredientsToggle.classList.remove('hidden');
+    }
 }
 
 function clearAllIngredients() {
     selectedIngredients = [];
     updateIngredientsUI();
+    // Reset collapsed state and show toggle
+    ingredientsCollapsed = false;
+    ingredientsPanel.classList.remove('collapsed');
+    ingredientsToggle.classList.remove('hidden');
 }
 
 function isIngredientSelected(productId) {
@@ -618,6 +667,14 @@ function updateIngredientsUI() {
                 <button class="ingredient-remove" onclick="removeIngredient('${ingredient.id}')">&times;</button>
             </div>
         `).join('');
+        
+            // Collapsed icons (for compact view) - show up to 5 thumbnails
+            if (ingredientsCollapsedIcons) {
+                const icons = selectedIngredients.slice(0,5).map(ing => `
+                    <img src="${ing.thumbnail || 'https://via.placeholder.com/40'}" title="${ing.name}" alt="${ing.name}" onerror="this.src='https://via.placeholder.com/40'"/>
+                `).join('');
+                ingredientsCollapsedIcons.innerHTML = icons;
+            }
     }
 
     // Update add buttons in product cards
@@ -641,6 +698,9 @@ function toggleIngredientsPanel() {
 function showIngredientsPanel() {
     ingredientsPanel.classList.add('active');
     ingredientsToggle.classList.add('hidden');
+    // when showing explicitly, expand the panel
+    ingredientsCollapsed = false;
+    ingredientsPanel.classList.remove('collapsed');
 }
 
 function hideIngredientsPanel() {
@@ -931,7 +991,7 @@ function showNotification(message) {
 
 // ===== Ticket Upload Functions =====
 let ticketFile = null;
-let ticketOption = null;
+let ticketOption = 'products'; // PDF uploads only parse/find products now
 let parsedTicketText = null; // Texto extraído del PDF para reutilizar
 
 function showTicketModal() {
@@ -1025,26 +1085,22 @@ function removeTicketFile() {
 }
 
 function selectTicketOption(option) {
-    ticketOption = option;
-    document.querySelectorAll('.btn-option').forEach(btn => btn.classList.remove('selected'));
-    if (option === 'recipes') {
-        document.getElementById('btnRecipes').classList.add('selected');
-    } else if (option === 'weekly') {
-        document.getElementById('btnWeeklyMenu').classList.add('selected');
-    } else if (option === 'products') {
-        document.getElementById('btnFindProducts').classList.add('selected');
-    }
+    // Deprecated: options other than 'products' were removed.
+    ticketOption = 'products';
+    const btn = document.getElementById('btnFindProducts');
+    if (btn) btn.classList.add('selected');
     updateProcessButton();
 }
 
 function updateProcessButton() {
     const btn = document.getElementById('processTicketBtn');
-    btn.disabled = !(ticketFile && ticketOption);
+    // Enable if a file is selected (we only support product matching from PDF uploads)
+    btn.disabled = !ticketFile;
 }
 
 function resetTicketForm() {
     ticketFile = null;
-    ticketOption = null;
+    ticketOption = 'products';
     parsedTicketText = null;
     document.getElementById('ticketUploadArea').classList.remove('hidden');
     document.getElementById('ticketFileInfo').classList.add('hidden');
@@ -1054,85 +1110,38 @@ function resetTicketForm() {
 }
 
 async function processTicket() {
-    if (!ticketFile || !ticketOption) return;
-    
-    // Guardar valores antes de cerrar el modal (que los resetea)
+    if (!ticketFile) return;
+
     const currentFile = ticketFile;
-    const currentOption = ticketOption;
-    
     const formData = new FormData();
     formData.append('ticket', currentFile);
-    formData.append('option', currentOption);
-    
+
     closeTicketModal();
-    
+
     // Mostrar modal de carga
     menuModal.classList.add('active');
     document.body.style.overflow = 'hidden';
     menuLoading.style.display = 'block';
     menuContent.innerHTML = '';
-    
+
     try {
-        // Si es la opción de buscar productos, usar endpoint diferente
-        if (currentOption === 'products') {
-            const response = await fetch('/api/find-ticket-products', {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                throw new Error('Error finding products');
-            }
-            
-            const data = await response.json();
-            menuLoading.style.display = 'none';
-            renderTicketProducts(data);
-            return;
-        }
-        
-        const response = await fetch('/procesar-ticket', {
+        // Always use the products matching endpoint for uploaded PDFs
+        const response = await fetch('/api/find-ticket-products', {
             method: 'POST',
             body: formData
         });
-        
+
         if (!response.ok) {
-            // Try to extract server error message for better debugging
             let errText = await response.text().catch(() => '');
-            try {
-                const errJson = JSON.parse(errText || '{}');
-                errText = errJson.error || errJson.message || errText;
-            } catch (e) {}
-            throw new Error('Error processing ticket: ' + (errText || response.status));
+            try { errText = JSON.parse(errText).error || errText; } catch (e) {}
+            throw new Error('Error finding products: ' + (errText || response.status));
         }
 
         const data = await response.json();
-        
-        console.log('📦 Datos recibidos del servidor:', data);
-        console.log('🎯 Opción seleccionada:', ticketOption);
-        
-        // Guardar el texto parseado para reutilizar
-        if (data.ticketText) {
-            parsedTicketText = data.ticketText;
-        }
-        
         menuLoading.style.display = 'none';
-        
-        // Detectar automáticamente el tipo de respuesta
-        if (data.weeklyMenu) {
-            renderWeeklyMenu(data, true);
-        } else if (data.recipes) {
-            currentMenuData = { recipes: data.recipes, ingredients: data.ingredients, fromTicket: true };
-            renderMenu(data, data.ingredients, true);
-        } else {
-            console.error('❌ Respuesta no reconocida:', data);
-            menuContent.innerHTML = `
-                <div class="menu-error">
-                    <h3>❌ Error</h3>
-                    <p>La respuesta del servidor no contiene recetas ni menú.</p>
-                </div>
-            `;
-        }
-        
+        // Render the confirmation UI where user can map/confirm products
+        renderTicketProducts(data);
+
     } catch (error) {
         console.error('Error processing ticket:', error);
         menuLoading.style.display = 'none';
