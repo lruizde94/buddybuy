@@ -121,7 +121,14 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/google/callback';
 // Habilitar o deshabilitar usuarios de prueba (login local)
-const ALLOW_TEST_USERS = (typeof process.env.ALLOW_TEST_USERS === 'undefined') ? true : (String(process.env.ALLOW_TEST_USERS).toLowerCase() === 'true');
+function parseBoolEnv(val, defaultVal = false) {
+    if (typeof val === 'undefined' || val === null) return defaultVal;
+    const s = String(val).trim().toLowerCase();
+    if (s === '') return defaultVal;
+    return ['1', 'true', 'yes', 'y', 'on'].includes(s);
+}
+const ALLOW_TEST_USERS = parseBoolEnv(process.env.ALLOW_TEST_USERS, true);
+console.log(`🔧 ALLOW_TEST_USERS raw="${process.env.ALLOW_TEST_USERS}" parsed=${ALLOW_TEST_USERS}`);
 
 // Archivos de datos locales
 const DATA_DIR = path.join(__dirname, 'data');
