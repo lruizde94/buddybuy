@@ -2586,6 +2586,7 @@ function updateUserUI() {
     const ticketToggle = document.getElementById('ticketToggle');
     const shoppingListToggle = document.getElementById('shoppingListToggle');
     const favoritesToggle = document.getElementById('favoritesToggle');
+    const ingredientsToggleEl = document.getElementById('ingredientsToggle');
     
     if (currentUser) {
         userInfo.style.display = 'flex';
@@ -2618,6 +2619,9 @@ function updateUserUI() {
             ticketToggle.style.display = 'flex';
             ticketToggle.onclick = () => showTicketModal();
         }
+        if (ingredientsToggleEl) {
+            ingredientsToggleEl.style.display = 'flex';
+        }
         if (shoppingListToggle) {
             shoppingListToggle.style.display = 'flex';
             shoppingListToggle.onclick = () => showShoppingListModal();
@@ -2638,6 +2642,9 @@ function updateUserUI() {
         if (ticketToggle) {
             ticketToggle.style.display = 'none';
             ticketToggle.onclick = null;
+        }
+        if (ingredientsToggleEl) {
+            ingredientsToggleEl.style.display = 'none';
         }
         if (shoppingListToggle) {
             shoppingListToggle.style.display = 'none';

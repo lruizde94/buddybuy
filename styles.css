@@ -4494,7 +4494,8 @@ body {
 .ticket-toggle,
 .shopping-list-toggle,
 .favorites-toggle,
-.user-favorites-toggle {
+.user-favorites-toggle,
+.ingredients-toggle {
     display: none !important;
 }
 
