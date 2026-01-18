@@ -2009,23 +2009,30 @@ async function applyFrecuentes() {
         const pid = String(p.id || p.productId || p.name);
         if (shoppingList.some(item => String(item.id) === pid)) continue;
 
-        // Try to enrich using currentProducts (live product DB) to get thumbnail/price
+        // Initial values from ticket record
         let thumbnail = p.thumbnail || '';
         let price = parseFloat(p.price || p.unit_price || 0) || 0;
         let packaging = p.packaging || '';
         let isWeight = Boolean(p.isWeight || (p.price_instructions && p.price_instructions.selling_method === 2));
 
-        try {
-            const match = currentProducts.find(cp => String(cp.id) === String(pid) || normalizeText(cp.display_name || cp.nombre || '') === normalizeText(p.name || p.display_name || ''));
-            if (match) {
-                thumbnail = thumbnail || match.thumbnail || match.imagen || '';
-                const priceInfo = match.price_instructions || {};
-                price = price || priceInfo.unit_price || 0;
-                packaging = packaging || match.packaging || '';
-                isWeight = isWeight || (priceInfo.selling_method === 2);
+        // If key visual/price data is missing, try to search the product DB via API
+        if (!thumbnail || !price) {
+            try {
+                const q = encodeURIComponent(p.name || p.display_name || '');
+                if (q) {
+                    const results = await searchProductsForList(p.name || p.display_name || '');
+                    if (results && results.length > 0) {
+                        const best = results[0];
+                        thumbnail = thumbnail || best.thumbnail || best.imagen || '';
+                        const priceInfo = best.price_instructions || {};
+                        price = price || priceInfo.unit_price || 0;
+                        packaging = packaging || best.packaging || '';
+                        isWeight = isWeight || (priceInfo.selling_method === 2);
+                    }
+                }
+            } catch (e) {
+                console.error('Error buscando producto para frecuentes:', e);
             }
-        } catch (e) {
-            // ignore lookup errors
         }
 
         shoppingList.push({
