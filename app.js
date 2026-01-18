@@ -601,6 +601,10 @@ function setupEventListeners() {
 
 // ===== Ingredients Functions =====
 function addIngredient(product) {
+    if (!currentUser) {
+        showLoginModal();
+        return;
+    }
     const exists = selectedIngredients.find(i => i.id === product.id);
     if (exists) {
         removeIngredient(product.id);
@@ -1763,6 +1767,11 @@ async function addAllTicketProductsToFavorites() {
 
 // Añadir productos del ticket a la lista de compra
 function addTicketProductsToShoppingList() {
+    if (!currentUser) {
+        showLoginModal();
+        return;
+    }
+
     const products = window.currentTicketProducts || [];
     if (products.length === 0) return;
     
@@ -1788,6 +1797,11 @@ function addTicketProductsToShoppingList() {
 
 // Añadir un producto individual a la lista de compra
 function addProductToShoppingList(productId, productName, thumbnail) {
+    if (!currentUser) {
+        showLoginModal();
+        return;
+    }
+
     const existingItem = shoppingList.find(item => String(item.id) === String(productId));
     
     if (existingItem) {
