@@ -13,7 +13,8 @@ function loadEnvFile() {
         const envContent = fs.readFileSync(envPath, 'utf-8');
         envContent.split('\n').forEach(line => {
             const trimmed = line.trim();
-            if (trimmed && !trimmed.startsWith('#')) {
+            // ignore comments and code-fence markers (e.g., ```dotenv) so malformed .env blocks are skipped
+            if (trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('```')) {
                 const [key, ...valueParts] = trimmed.split('=');
                 const value = valueParts.join('=').trim();
                 if (key && value && !process.env[key.trim()]) {
