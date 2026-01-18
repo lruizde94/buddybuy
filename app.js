@@ -2583,6 +2583,9 @@ function updateUserUI() {
     const loginPrompt = document.getElementById('loginPrompt');
     const userFavoritesToggle = document.getElementById('userFavoritesToggle');
     const currentUserName = document.getElementById('currentUserName');
+    const ticketToggle = document.getElementById('ticketToggle');
+    const shoppingListToggle = document.getElementById('shoppingListToggle');
+    const favoritesToggle = document.getElementById('favoritesToggle');
     
     if (currentUser) {
         userInfo.style.display = 'flex';
@@ -2610,10 +2613,20 @@ function updateUserUI() {
         
         userFavoritesToggle.style.display = 'flex';
         updateUserFavoritesCount();
+        // Enable global actions for logged users
+        if (ticketToggle) ticketToggle.onclick = () => showTicketModal();
+        if (shoppingListToggle) shoppingListToggle.onclick = () => showShoppingListModal();
+        if (favoritesToggle) favoritesToggle.onclick = () => showFavoritesModal();
+        if (generateMenu) generateMenu.removeAttribute('disabled');
     } else {
         userInfo.style.display = 'none';
         loginPrompt.style.display = 'flex';
         userFavoritesToggle.style.display = 'none';
+        // Disable actions for anonymous users
+        if (ticketToggle) ticketToggle.onclick = () => showLoginModal();
+        if (shoppingListToggle) shoppingListToggle.onclick = () => showLoginModal();
+        if (favoritesToggle) favoritesToggle.onclick = () => showLoginModal();
+        if (generateMenu) generateMenu.setAttribute('disabled', 'true');
     }
 }
 
