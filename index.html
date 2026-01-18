@@ -17,6 +17,7 @@
                 <div class="user-info" id="userInfo" style="display: none;">
                     <span>👤</span>
                     <span id="currentUserName"></span>
+                    <button class="btn-profile" onclick="showProfileModal()">Mi Perfil</button>
                     <button class="btn-logout" onclick="logoutUser()">Salir</button>
                 </div>
                 <div class="login-prompt" id="loginPrompt">
@@ -32,7 +33,6 @@
         <div class="container">
             <div class="header-content">
                 <div class="logo">
-                    <span class="logo-icon">🛒</span>
                     <h1>BuddyBuy</h1>
                 </div>
                 <div class="search-container">
@@ -301,6 +301,105 @@
         </div>
     </div>
 
+    <!-- Profile Modal -->
+    <div class="modal" id="profileModal">
+        <div class="modal-content modal-xlarge">
+            <button class="modal-close" onclick="closeProfileModal()">×</button>
+            <div class="modal-body">
+                <div class="profile-header">
+                    <h2>👤 Mi Perfil</h2>
+                    <p id="profileUserName"></p>
+                </div>
+                
+                <!-- Profile Tabs -->
+                <div class="profile-tabs">
+                    <button class="profile-tab active" onclick="switchProfileTab('tickets')" id="tabTickets">🧾 Mis Tickets</button>
+                    <button class="profile-tab" onclick="switchProfileTab('stats')" id="tabStats">📊 Estadísticas</button>
+                </div>
+                
+                <!-- Tickets Tab Content -->
+                <div class="profile-tab-content" id="ticketsTabContent">
+                    <div class="tickets-list" id="ticketsList">
+                        <div class="empty-tickets">
+                            <span>🧾</span>
+                            <p>No tienes tickets guardados</p>
+                            <small>Sube un ticket de compra y se guardará automáticamente aquí</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Stats Tab Content -->
+                <div class="profile-tab-content hidden" id="statsTabContent">
+                    <div class="stats-filters">
+                        <label>Filtrar por fecha:</label>
+                        <div class="date-range-picker">
+                            <input type="date" id="statsStartDate" onchange="loadUserStats()">
+                            <span>a</span>
+                            <input type="date" id="statsEndDate" onchange="loadUserStats()">
+                            <button class="btn-clear-dates" onclick="clearDateFilters()">Limpiar</button>
+                        </div>
+                        <div class="quick-date-filters">
+                            <button onclick="setQuickDateFilter('week')">Última semana</button>
+                            <button onclick="setQuickDateFilter('month')">Último mes</button>
+                            <button onclick="setQuickDateFilter('3months')">3 meses</button>
+                            <button onclick="setQuickDateFilter('year')">Este año</button>
+                            <button onclick="setQuickDateFilter('all')">Todo</button>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-dashboard" id="statsDashboard">
+                        <div class="stats-summary">
+                            <div class="stat-card">
+                                <span class="stat-icon">🧾</span>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="statTotalTickets">0</span>
+                                    <span class="stat-label">Tickets</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-icon">💰</span>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="statTotalSpent">0,00 €</span>
+                                    <span class="stat-label">Gasto Total</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-icon">📊</span>
+                                <div class="stat-info">
+                                    <span class="stat-value" id="statAvgTicket">0,00 €</span>
+                                    <span class="stat-label">Media por Ticket</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stats-charts">
+                            <div class="chart-container">
+                                <h4>📁 Gasto por Categoría</h4>
+                                <div class="category-chart" id="categoryChart">
+                                    <p class="no-data">No hay datos disponibles</p>
+                                </div>
+                            </div>
+                            
+                            <div class="chart-container">
+                                <h4>⭐ Productos más comprados</h4>
+                                <div class="top-products-list" id="topProductsList">
+                                    <p class="no-data">No hay datos disponibles</p>
+                                </div>
+                            </div>
+                            
+                            <div class="chart-container full-width">
+                                <h4>📈 Gasto Mensual</h4>
+                                <div class="monthly-chart" id="monthlyChart">
+                                    <p class="no-data">No hay datos disponibles</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Product Modal -->
     <div class="modal" id="productModal">
         <div class="modal-content">
@@ -331,8 +430,6 @@
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
-            <p>Datos obtenidos de la API pública de Mercadona.</p>
-            <p>Este proyecto es solo con fines educativos.</p>
         </div>
     </footer>
 

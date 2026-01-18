@@ -59,12 +59,14 @@ const PRODUCTOS_FILE = path.join(DATA_DIR, 'productos.json');
 const CATEGORIAS_FILE = path.join(DATA_DIR, 'categorias.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+const ASSOCIATIONS_FILE = path.join(DATA_DIR, 'product_associations.json');
 
 // Cache de datos en memoria
 let productosCache = null;
 let categoriasCache = null;
 let usersCache = {};
 let sessionsCache = {};
+let associationsCache = {}; // { "normalized_ticket_item": { productId: "id", originalName: "name" } }
 
 // Cargar datos locales al iniciar
 function loadLocalData() {
@@ -86,6 +88,10 @@ function loadLocalData() {
             sessionsCache = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf-8'));
             console.log(`🔐 Cargadas ${Object.keys(sessionsCache).length} sesiones`);
         }
+        if (fs.existsSync(ASSOCIATIONS_FILE)) {
+            associationsCache = JSON.parse(fs.readFileSync(ASSOCIATIONS_FILE, 'utf-8'));
+            console.log(`🔗 Cargadas ${Object.keys(associationsCache).length} asociaciones de productos`);
+        }
     } catch (error) {
         console.log('⚠️ No se encontraron datos locales. Ejecuta: node sync-productos.js');
     }
@@ -100,6 +106,18 @@ function saveSessions() {
         fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessionsCache, null, 2));
     } catch (error) {
         console.error('Error guardando sesiones:', error);
+    }
+}
+
+// Guardar asociaciones en archivo
+function saveAssociations() {
+    try {
+        if (!fs.existsSync(DATA_DIR)) {
+            fs.mkdirSync(DATA_DIR, { recursive: true });
+        }
+        fs.writeFileSync(ASSOCIATIONS_FILE, JSON.stringify(associationsCache, null, 2));
+    } catch (error) {
+        console.error('Error guardando asociaciones:', error);
     }
 }
 
@@ -174,21 +192,33 @@ const mimeTypes = {
 };
 
 const server = http.createServer((req, res) => {
+    console.log(`📨 Request: ${req.method} ${req.url}`);
+    
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User');
 
     if (req.method === 'OPTIONS') {
+        console.log('📨 OPTIONS request handled');
         res.writeHead(200);
         res.end();
         return;
     }
 
     // Use WHATWG URL API instead of deprecated url.parse()
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const pathname = url.pathname;
-    const query = Object.fromEntries(url.searchParams);
+    let url, pathname, query;
+    try {
+        url = new URL(req.url, `http://${req.headers.host}`);
+        pathname = url.pathname;
+        query = Object.fromEntries(url.searchParams);
+        console.log(`📨 Parsed URL: ${pathname}`);
+    } catch (e) {
+        console.error('❌ Error parsing URL:', e);
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: 'Invalid URL' }));
+        return;
+    }
 
     // ===== OAuth 2.0 Endpoints =====
     
@@ -687,6 +717,228 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // ===== User Tickets API =====
+    
+    // Get user tickets
+    if (req.url === '/api/user/tickets' && req.method === 'GET') {
+        const username = req.headers['x-user'];
+        if (!username || !usersCache[username]) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
+            return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+            tickets: usersCache[username].tickets || []
+        }));
+        return;
+    }
+    
+    // Save ticket to user history
+    if (req.url === '/api/user/tickets' && req.method === 'POST') {
+        const username = req.headers['x-user'];
+        if (!username || !usersCache[username]) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
+            return;
+        }
+        
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { ticket } = JSON.parse(body);
+                
+                if (!usersCache[username].tickets) {
+                    usersCache[username].tickets = [];
+                }
+                
+                // Generate unique hash from ticket content to avoid duplicates
+                const ticketHash = crypto.createHash('md5')
+                    .update(ticket.date + ticket.total + JSON.stringify(ticket.products.map(p => p.name).sort()))
+                    .digest('hex');
+                
+                // Check for duplicates
+                const isDuplicate = usersCache[username].tickets.some(t => t.hash === ticketHash);
+                
+                if (!isDuplicate) {
+                    usersCache[username].tickets.push({
+                        ...ticket,
+                        hash: ticketHash,
+                        savedAt: new Date().toISOString()
+                    });
+                    saveUsers();
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, message: 'Ticket guardado' }));
+                } else {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, message: 'Ticket ya existe', duplicate: true }));
+                }
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Error procesando solicitud' }));
+            }
+        });
+        return;
+    }
+    
+    // Delete a ticket from user history
+    if (req.url === '/api/user/tickets' && req.method === 'DELETE') {
+        const username = req.headers['x-user'];
+        if (!username || !usersCache[username]) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
+            return;
+        }
+        
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { ticketHash } = JSON.parse(body);
+                
+                if (usersCache[username].tickets) {
+                    usersCache[username].tickets = usersCache[username].tickets.filter(t => t.hash !== ticketHash);
+                    saveUsers();
+                }
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Error procesando solicitud' }));
+            }
+        });
+        return;
+    }
+    
+    // Save product associations for future automatic matching
+    if (req.url === '/api/save-product-associations' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { associations } = JSON.parse(body);
+                
+                // associations should be array of { ticketItem: "name", productId: "id" }
+                let savedCount = 0;
+                for (const assoc of associations) {
+                    const normalizedKey = assoc.ticketItem.toLowerCase().trim();
+                    const producto = productosCache.productos.find(p => p.id === assoc.productId);
+                    if (producto) {
+                        associationsCache[normalizedKey] = {
+                            productId: assoc.productId,
+                            originalName: producto.nombre,
+                            savedAt: Date.now()
+                        };
+                        savedCount++;
+                    }
+                }
+                
+                if (savedCount > 0) {
+                    saveAssociations();
+                    console.log(`💾 Guardadas ${savedCount} asociaciones de productos`);
+                }
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ saved: savedCount }));
+            } catch (e) {
+                console.error('Error saving associations:', e);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Error procesando asociaciones' }));
+            }
+        });
+        return;
+    }
+    
+    // Get user stats (aggregated ticket data)
+    if (req.url.startsWith('/api/user/stats') && req.method === 'GET') {
+        const username = req.headers['x-user'];
+        if (!username || !usersCache[username]) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
+            return;
+        }
+        
+        const urlParams = new URLSearchParams(req.url.split('?')[1] || '');
+        const startDate = urlParams.get('startDate');
+        const endDate = urlParams.get('endDate');
+        
+        let tickets = usersCache[username].tickets || [];
+        
+        // Filter by date range if provided
+        if (startDate || endDate) {
+            tickets = tickets.filter(ticket => {
+                const ticketDate = new Date(ticket.date);
+                if (startDate && ticketDate < new Date(startDate)) return false;
+                if (endDate && ticketDate > new Date(endDate)) return false;
+                return true;
+            });
+        }
+        
+        // Calculate stats
+        const stats = {
+            totalTickets: tickets.length,
+            totalSpent: 0,
+            categoryBreakdown: {},
+            categoryProducts: {}, // Products grouped by category
+            monthlySpending: {},
+            productFrequency: {}
+        };
+        
+        for (const ticket of tickets) {
+            stats.totalSpent += ticket.total || 0;
+            
+            // Monthly spending
+            const monthKey = ticket.date ? ticket.date.substring(0, 7) : 'desconocido';
+            stats.monthlySpending[monthKey] = (stats.monthlySpending[monthKey] || 0) + (ticket.total || 0);
+            
+            // Category breakdown and product frequency
+            for (const product of (ticket.products || [])) {
+                const category = product.category || 'Sin categoría';
+                stats.categoryBreakdown[category] = (stats.categoryBreakdown[category] || 0) + (product.price || 0);
+                
+                // Track products per category
+                if (!stats.categoryProducts[category]) {
+                    stats.categoryProducts[category] = {};
+                }
+                const productName = product.name || 'Desconocido';
+                if (!stats.categoryProducts[category][productName]) {
+                    stats.categoryProducts[category][productName] = { count: 0, totalSpent: 0 };
+                }
+                stats.categoryProducts[category][productName].count++;
+                stats.categoryProducts[category][productName].totalSpent += (product.price || 0);
+                
+                if (!stats.productFrequency[productName]) {
+                    stats.productFrequency[productName] = { count: 0, totalSpent: 0 };
+                }
+                stats.productFrequency[productName].count++;
+                stats.productFrequency[productName].totalSpent += (product.price || 0);
+            }
+        }
+        
+        // Convert categoryProducts to sorted arrays
+        for (const category in stats.categoryProducts) {
+            const products = Object.entries(stats.categoryProducts[category])
+                .map(([name, data]) => ({ name, ...data }))
+                .sort((a, b) => b.totalSpent - a.totalSpent);
+            stats.categoryProducts[category] = products;
+        }
+        
+        // Sort product frequency by count
+        const sortedProducts = Object.entries(stats.productFrequency)
+            .sort((a, b) => b[1].count - a[1].count)
+            .slice(0, 20);
+        stats.topProducts = sortedProducts.map(([name, data]) => ({ name, ...data }));
+        delete stats.productFrequency;
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(stats));
+        return;
+    }
+
     // Find products from ticket text
     if (req.url === '/api/find-ticket-products' && req.method === 'POST') {
         // Handle multipart form data with PDF file
@@ -718,6 +970,27 @@ const server = http.createServer((req, res) => {
                     res.end(JSON.stringify({ error: 'No hay archivo o datos' }));
                     return;
                 }
+
+                const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+                if (fileBuffer.length > MAX_BYTES) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'El archivo supera el límite de 5 MB' }));
+                    return;
+                }
+
+                // Check PDF magic header
+                try {
+                    const header = fileBuffer.slice(0, 4).toString();
+                    if (header !== '%PDF') {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'El archivo no es un PDF válido' }));
+                        return;
+                    }
+                } catch (e) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'No se pudo validar el archivo' }));
+                    return;
+                }
                 
                 // Parse PDF using existing function
                 const ticketText = await parsePDF(fileBuffer);
@@ -725,14 +998,100 @@ const server = http.createServer((req, res) => {
                 
                 // Extract ingredient names from ticket
                 const ingredients = extractIngredientsFromTicket(ticketText);
-                console.log('🔍 Ingredientes extraídos del ticket:', ingredients.join(', '));
+                console.log('🔍 Ingredientes extraídos del ticket:', ingredients.map(i => `${i.name}${i.price ? ` (${i.price}€)` : ''}`).join(', '));
                 
-                // Find matching products - buscar coincidencias más exactas
+                // Find matching products - usar asociaciones aprendidas primero
                 const foundProducts = [];
                 const matchedIngredients = new Set();
                 
                 for (const ingredient of ingredients) {
-                    const ingredientLower = ingredient.toLowerCase();
+                    const ingredientNormalized = ingredient.name.toLowerCase().trim();
+                    
+                    // Primero buscar en asociaciones guardadas
+                    if (associationsCache[ingredientNormalized]) {
+                        const assoc = associationsCache[ingredientNormalized];
+                        const producto = productosCache.productos.find(p => p.id === assoc.productId);
+                        // Verificar que el producto existe y es de categoría alimentaria
+                        const nonFoodCategories = [
+                            'Bebé',
+                            'Cuidado del cabello',
+                            'Cuidado facial y corporal', 
+                            'Fitoterapia y parafarmacia',
+                            'Limpieza y hogar',
+                            'Maquillaje',
+                            'Mascotas'
+                        ];
+
+                        if (producto && !nonFoodCategories.includes(producto.categoria_L1) && !foundProducts.some(p => p.id === producto.id)) {
+                            const primary = {
+                                id: producto.id,
+                                display_name: producto.nombre,
+                                packaging: producto.packaging,
+                                thumbnail: producto.imagen,
+                                categoryL2: producto.categoria_L2,
+                                categoryL3: producto.categoria_L3,
+                                matchedIngredient: ingredient.name,
+                                unit_price: producto.precio,
+                                fromAssociation: true // marcar que viene de asociación guardada
+                            };
+
+                            // Si tenemos precio en el ticket y difiere significativamente, buscar sugerencias alternas
+                            const ticketPrice = ingredient.price;
+                            if (ticketPrice && producto.precio) {
+                                const priceDiffRatio = Math.abs(ticketPrice - producto.precio) / Math.max(ticketPrice, producto.precio);
+                                if (priceDiffRatio > 0.10) { // umbral 10%
+                                    // Buscar candidatos similares por nombre y con precio más cercano
+                                    const searchTerms = ingredient.name.toLowerCase().split(/\s+/).filter(t => t.length >= 4 && !/^\d+$/.test(t));
+                                    const candidates = productosCache.productos
+                                        .filter(p => !nonFoodCategories.includes(p.categoria_L1) && p.id !== producto.id);
+
+                                    const scored = candidates.map(p => {
+                                        const nombreLower = p.nombre.toLowerCase();
+                                        let nameScore = 0;
+                                        for (const term of searchTerms) {
+                                            if (nombreLower.includes(term)) {
+                                                nameScore += term.length >= 6 ? 3 : 1;
+                                            }
+                                        }
+                                        // Score por proximidad de precio (mayor si más cercano)
+                                        let priceScore = 0;
+                                        if (ticketPrice && p.precio) {
+                                            const pr = Math.abs(ticketPrice - p.precio) / Math.max(ticketPrice, p.precio);
+                                            priceScore = 1 - pr; // entre 0 y 1 (mayor = mejor)
+                                        }
+                                        return { p, score: nameScore + priceScore };
+                                    })
+                                    .filter(s => s.score > 0)
+                                    .sort((a, b) => b.score - a.score)
+                                    .slice(0, 3);
+
+                                    if (scored.length > 0) {
+                                        primary.suggestions = scored.map(s => ({
+                                            id: s.p.id,
+                                            display_name: s.p.nombre,
+                                            packaging: s.p.packaging,
+                                            thumbnail: s.p.imagen,
+                                            categoryL2: s.p.categoria_L2,
+                                            categoryL3: s.p.categoria_L3,
+                                            unit_price: s.p.precio
+                                        }));
+                                        primary.priceMismatch = true;
+                                    }
+                                }
+                            }
+
+                            foundProducts.push(primary);
+                            matchedIngredients.add(ingredient.name);
+                            console.log(`🔗 Asociación encontrada para "${ingredient.name}": ${producto.nombre}`);
+                            if (primary.priceMismatch) console.log(`⚠️ Precio no coincide (ticket: ${ticketPrice} vs producto: ${producto.precio}), sugerencias añadidas`);
+                            continue; // pasar al siguiente ingrediente
+                        }
+                    }
+                    
+                    // Si no hay asociación, usar búsqueda automática
+                    const ingredientLower = ingredient.name.toLowerCase();
+                    const ticketPrice = ingredient.price;
+                    
                     // Obtener palabras significativas (4+ letras, sin números)
                     const searchTerms = ingredientLower
                         .split(/\s+/)
@@ -740,53 +1099,105 @@ const server = http.createServer((req, res) => {
                     
                     if (searchTerms.length === 0) continue;
                     
+                    let bestMatch = null;
+                    let bestScore = 0;
+                    
+                    // Categorías que NO son de comida (productos no alimentarios)
+                    const nonFoodCategories = [
+                        'Bebé',
+                        'Cuidado del cabello',
+                        'Cuidado facial y corporal', 
+                        'Fitoterapia y parafarmacia',
+                        'Limpieza y hogar',
+                        'Maquillaje',
+                        'Mascotas'
+                    ];
+                    
                     for (const producto of productosCache.productos) {
-                        const nombreLower = producto.nombre.toLowerCase();
+                        // Excluir productos de categorías no alimentarias
+                        if (nonFoodCategories.includes(producto.categoria_L1)) {
+                            continue;
+                        }
                         
-                        // Buscar coincidencia: al menos 2 términos coinciden, o 1 término largo
+                        const nombreLower = producto.nombre.toLowerCase();
+                        const productPrice = producto.precio;
+                        
+                        // Calcular score de coincidencia de nombre
+                        let nameScore = 0;
                         let matchCount = 0;
                         let hasLongMatch = false;
                         
                         for (const term of searchTerms) {
                             if (nombreLower.includes(term)) {
                                 matchCount++;
+                                nameScore += term.length >= 6 ? 3 : 1; // Más peso a términos largos
                                 if (term.length >= 6) hasLongMatch = true;
                             }
                         }
                         
-                        // Coincide si: tiene término largo, o 2+ términos, o el ingrediente está contenido en el nombre
-                        const matches = hasLongMatch || matchCount >= 2 || 
-                            nombreLower.includes(ingredientLower) || 
-                            ingredientLower.includes(nombreLower.split(' ').slice(0, 3).join(' '));
+                        // Bonus por coincidencias exactas
+                        if (nombreLower.includes(ingredientLower)) nameScore += 5;
+                        if (ingredientLower.includes(nombreLower.split(' ').slice(0, 3).join(' '))) nameScore += 3;
                         
-                        if (matches && !foundProducts.some(p => p.id === producto.id)) {
-                            foundProducts.push({
-                                id: producto.id,
-                                display_name: producto.nombre,
-                                packaging: producto.packaging,
-                                thumbnail: producto.imagen,
-                                categoryL2: producto.categoria_L2,
-                                categoryL3: producto.categoria_L3,
-                                matchedIngredient: ingredient,
-                                unit_price: producto.precio
-                            });
-                            matchedIngredients.add(ingredient);
+                        // Calcular score de precio (si tenemos precio del ticket)
+                        let priceScore = 0;
+                        if (ticketPrice && productPrice) {
+                            const priceDiff = Math.abs(ticketPrice - productPrice);
+                            const priceRatio = priceDiff / Math.max(ticketPrice, productPrice);
                             
-                            // Máximo 2 productos por ingrediente del ticket
-                            if (foundProducts.filter(p => p.matchedIngredient === ingredient).length >= 2) {
-                                break;
+                            if (priceRatio < 0.05) { // Diferencia menor al 5%
+                                priceScore = 5;
+                            } else if (priceRatio < 0.10) { // Diferencia menor al 10%
+                                priceScore = 3;
+                            } else if (priceRatio < 0.20) { // Diferencia menor al 20%
+                                priceScore = 1;
                             }
+                        }
+                        
+                        // Score total (nombre + precio)
+                        const totalScore = nameScore + priceScore;
+                        
+                        // Solo considerar si tiene algún score mínimo
+                        if (totalScore >= 3 && totalScore > bestScore) {
+                            bestMatch = producto;
+                            bestScore = totalScore;
+                        }
+                    }
+                    
+                    // Si encontramos un buen match, agregarlo
+                    if (bestMatch) {
+                        foundProducts.push({
+                            id: bestMatch.id,
+                            display_name: bestMatch.nombre,
+                            packaging: bestMatch.packaging,
+                            thumbnail: bestMatch.imagen,
+                            categoryL2: bestMatch.categoria_L2,
+                            categoryL3: bestMatch.categoria_L3,
+                            matchedIngredient: ingredient.name,
+                            unit_price: bestMatch.precio,
+                            matchScore: bestScore,
+                            hasPriceMatch: ticketPrice ? Math.abs(ticketPrice - bestMatch.precio) / Math.max(ticketPrice, bestMatch.precio) < 0.10 : false
+                        });
+                        matchedIngredients.add(ingredient.name);
+                        
+                        // Máximo 2 productos por ingrediente del ticket
+                        if (foundProducts.filter(p => p.matchedIngredient === ingredient.name).length >= 2) {
+                            break;
                         }
                     }
                 }
                 
                 console.log(`✅ Encontrados ${foundProducts.length} productos que coinciden con ${matchedIngredients.size} ingredientes del ticket`);
                 
+                // Extract ticket date and total
+                const ticketInfo = extractTicketInfo(ticketText);
+                
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 
                     products: foundProducts.slice(0, 50),
                     ingredients: ingredients,
-                    matchedCount: matchedIngredients.size
+                    matchedCount: matchedIngredients.size,
+                    ticketInfo: ticketInfo
                 }));
             } catch (e) {
                 console.error('Error finding products:', e);
@@ -993,11 +1404,13 @@ const server = http.createServer((req, res) => {
 // Handle ticket upload and processing
 function handleTicketUpload(req, res) {
     if (!PDFParse) {
+        console.error('❌ PDF parser not available');
         res.writeHead(500);
         res.end(JSON.stringify({ error: 'PDF parser not installed' }));
         return;
     }
 
+    console.log('📄 Iniciando procesamiento de ticket...');
     let body = [];
     
     req.on('data', chunk => {
@@ -1006,45 +1419,96 @@ function handleTicketUpload(req, res) {
 
     req.on('end', async () => {
         try {
+            console.log('📄 Datos del formulario recibidos, tamaño:', Buffer.concat(body).length);
             const buffer = Buffer.concat(body);
             
             // Parse multipart form data manually
-            const boundary = req.headers['content-type'].split('boundary=')[1];
-            const parts = parseMultipart(buffer, boundary);
+            const boundary = req.headers['content-type']?.split('boundary=')[1];
+            if (!boundary) {
+                console.error('❌ No boundary found in content-type');
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'Invalid form data' }));
+                return;
+            }
             
+            console.log('📄 Boundary:', boundary);
+            const parts = parseMultipart(buffer, boundary);
+            console.log('📄 Partes parseadas:', parts.length);
+
             let pdfBuffer = null;
             let option = 'recipes';
-            
+            let ticketParts = 0;
+
             for (const part of parts) {
+                console.log('📄 Parte:', part.name, part.filename, part.data ? part.data.length : 0);
                 if (part.name === 'ticket' && part.data) {
                     pdfBuffer = part.data;
+                    ticketParts++;
                 } else if (part.name === 'option') {
                     option = part.data.toString().trim();
                 }
             }
-            
+
+            if (ticketParts > 1) {
+                console.error('❌ Multiple ticket files provided');
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Solo se permite un archivo PDF' }));
+                return;
+            }
+
             if (!pdfBuffer) {
-                res.writeHead(400);
-                res.end(JSON.stringify({ error: 'No PDF file provided' }));
+                console.error('❌ No PDF buffer found');
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'No se proporcionó un archivo PDF' }));
+                return;
+            }
+
+            console.log('📄 PDF buffer size:', pdfBuffer.length);
+
+            const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+            if (pdfBuffer.length > MAX_BYTES) {
+                console.error('❌ PDF demasiado grande:', pdfBuffer.length);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'El archivo supera el límite de 5 MB' }));
+                return;
+            }
+
+            // Quick magic bytes check for PDF
+            try {
+                const header = pdfBuffer.slice(0, 4).toString();
+                if (header !== '%PDF') {
+                    console.error('❌ Archivo no tiene encabezado PDF válido:', header);
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'El archivo no es un PDF válido' }));
+                    return;
+                }
+            } catch (e) {
+                console.error('❌ Error comprobando encabezado PDF:', e);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'No se pudo validar el archivo' }));
                 return;
             }
             
             // Parse PDF using helper function
+            console.log('📄 Iniciando parsing del PDF...');
             const ticketText = await parsePDF(pdfBuffer);
+            console.log('📄 PDF parseado exitosamente, longitud del texto:', ticketText.length);
             
             console.log('📄 Ticket procesado, texto extraído:', ticketText.substring(0, 200) + '...');
             
             // Generate prompt based on option, passing ticketText to include in response
             if (option === 'weekly') {
+                console.log('📄 Generando menú semanal...');
                 generateWeeklyMenu(ticketText, res, true);
             } else {
+                console.log('📄 Generando recetas...');
                 generateRecipesFromTicket(ticketText, res, true);
             }
             
         } catch (e) {
-            console.error('Ticket processing error:', e);
+            console.error('❌ Error procesando ticket:', e);
             res.writeHead(500);
-            res.end(JSON.stringify({ error: 'Error processing PDF' }));
+            res.end(JSON.stringify({ error: 'Error processing PDF: ' + e.message }));
         }
     });
 }
@@ -1202,6 +1666,13 @@ function extractIngredientsFromTicket(ticketText) {
         }
         if (shouldIgnore) continue;
         
+        // Extraer precio de la línea (patrones comunes: 1,23€, 1.23 €, etc.)
+        let price = null;
+        const priceMatch = cleanLine.match(/(\d+[,.]\d{2})\s*€?/i);
+        if (priceMatch) {
+            price = parseFloat(priceMatch[1].replace(',', '.'));
+        }
+        
         // Extraer nombre del producto (quitar precios, cantidades, etc.)
         let productName = cleanLine
             .replace(/[\d]+[,.][\d]+\s*€?/g, '') // Quitar precios
@@ -1215,24 +1686,77 @@ function extractIngredientsFromTicket(ticketText) {
         // Validar que parece un producto válido
         if (productName.length >= 4 && 
             productName.length <= 50 && 
-            !ingredients.includes(productName) &&
+            !ingredients.some(i => i.name === productName) &&
             /[a-záéíóúñ]/i.test(productName) && // Debe contener letras
             !/^\d+$/.test(productName) && // No puede ser solo números
             !productName.includes('****') && // No datos de tarjeta
             productName.split(' ').length <= 6) { // Máximo 6 palabras
-            ingredients.push(productName);
+            ingredients.push({
+                name: productName,
+                price: price
+            });
         }
     }
     
     return ingredients.slice(0, 30); // Máximo 30 ingredientes
 }
 
+// Extract date and total from ticket text
+function extractTicketInfo(ticketText) {
+    let date = null;
+    let total = null;
+    
+    // Try to find date patterns (DD/MM/YYYY or similar)
+    const datePatterns = [
+        /(\d{2}\/\d{2}\/\d{4})/,
+        /(\d{2}-\d{2}-\d{4})/,
+        /(\d{4}-\d{2}-\d{2})/
+    ];
+    
+    for (const pattern of datePatterns) {
+        const match = ticketText.match(pattern);
+        if (match) {
+            const parts = match[1].split(/[\/\-]/);
+            if (parts[0].length === 4) {
+                // YYYY-MM-DD format
+                date = `${parts[0]}-${parts[1]}-${parts[2]}`;
+            } else {
+                // DD/MM/YYYY format
+                date = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+            break;
+        }
+    }
+    
+    // If no date found, use current date
+    if (!date) {
+        date = new Date().toISOString().split('T')[0];
+    }
+    
+    // Try to find total (looking for patterns like "TOTAL" followed by amount)
+    const totalPatterns = [
+        /total[:\s]+(\d+[,\.]\d{2})/i,
+        /importe\s*total[:\s]+(\d+[,\.]\d{2})/i,
+        /a\s*pagar[:\s]+(\d+[,\.]\d{2})/i
+    ];
+    
+    for (const pattern of totalPatterns) {
+        const match = ticketText.match(pattern);
+        if (match) {
+            total = parseFloat(match[1].replace(',', '.'));
+            break;
+        }
+    }
+    
+    return { date, total };
+}
+
 // Generate recipes from ticket
 function generateRecipesFromTicket(ticketText, res, includeTicketText = false) {
     // Extraer ingredientes localmente (si es una lista ya procesada, usarla directamente)
     const isAlreadyIngredientsList = !ticketText.includes('MERCADONA') && !ticketText.includes('€');
-    const ingredients = isAlreadyIngredientsList ? ticketText.split(', ') : extractIngredientsFromTicket(ticketText);
-    const ingredientsList = ingredients.join(', ');
+    const ingredients = isAlreadyIngredientsList ? ticketText.split(', ').map(name => ({ name, price: null })) : extractIngredientsFromTicket(ticketText);
+    const ingredientsList = ingredients.map(i => i.name).join(', ');
     
     console.log('🥗 Ingredientes extraídos:', ingredientsList);
     
@@ -1275,8 +1799,8 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta (sin texto a
 function generateWeeklyMenu(ticketText, res, includeTicketText = false) {
     // Extraer ingredientes localmente (si es una lista ya procesada, usarla directamente)
     const isAlreadyIngredientsList = !ticketText.includes('MERCADONA') && !ticketText.includes('€');
-    const ingredients = isAlreadyIngredientsList ? ticketText.split(', ') : extractIngredientsFromTicket(ticketText);
-    const ingredientsList = ingredients.join(', ');
+    const ingredients = isAlreadyIngredientsList ? ticketText.split(', ').map(name => ({ name, price: null })) : extractIngredientsFromTicket(ticketText);
+    const ingredientsList = ingredients.map(i => i.name).join(', ');
     
     console.log('🥗 Ingredientes extraídos:', ingredientsList);
     
@@ -1370,6 +1894,14 @@ Asegúrate de que:
 
 // Llamada a OpenAI API
 function callOpenAI(prompt, res, ticketText = null) {
+    if (!OPENAI_API_KEY) {
+        console.error('❌ No OpenAI API key configured');
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: 'OpenAI API key not configured' }));
+        return;
+    }
+
+    console.log('🤖 Enviando prompt a OpenAI...');
     const openaiData = JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [{
@@ -1392,8 +1924,9 @@ function callOpenAI(prompt, res, ticketText = null) {
     };
 
     const openaiReq = https.request(options, (openaiRes) => {
-        let data = '';
+        console.log('📡 Respuesta OpenAI status:', openaiRes.statusCode);
         
+        let data = '';
         openaiRes.on('data', chunk => {
             data += chunk;
         });
@@ -1403,9 +1936,9 @@ function callOpenAI(prompt, res, ticketText = null) {
                 const response = JSON.parse(data);
                 
                 if (response.error) {
-                    console.error('OpenAI error:', response.error);
+                    console.error('❌ OpenAI API error:', response.error);
                     res.writeHead(500);
-                    res.end(JSON.stringify({ error: response.error.message }));
+                    res.end(JSON.stringify({ error: 'OpenAI API error: ' + response.error.message }));
                     return;
                 }
 
@@ -1441,9 +1974,9 @@ function callOpenAI(prompt, res, ticketText = null) {
     });
 
     openaiReq.on('error', (error) => {
-        console.error('OpenAI API error:', error);
+        console.error('❌ Error conectando a OpenAI:', error);
         res.writeHead(500);
-        res.end(JSON.stringify({ error: 'Error connecting to OpenAI API' }));
+        res.end(JSON.stringify({ error: 'Error connecting to OpenAI: ' + error.message }));
     });
 
     openaiReq.write(openaiData);

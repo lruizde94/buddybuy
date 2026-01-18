@@ -963,17 +963,48 @@ function setupTicketDragDrop() {
         e.preventDefault();
         uploadArea.classList.remove('dragover');
         const files = e.dataTransfer.files;
-        if (files.length > 0 && files[0].type === 'application/pdf') {
-            handleTicketFile(files[0]);
-        } else {
-            showNotification('Por favor, selecciona un archivo PDF');
+        if (!files || files.length === 0) {
+            showNotification('No se detectó ningún archivo');
+            return;
         }
+        if (files.length > 1) {
+            showNotification('Solo puedes adjuntar un archivo');
+            return;
+        }
+        const file = files[0];
+        const maxSize = 5 * 1024 * 1024; // 5 MB
+        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+            showNotification('Solo se permiten archivos PDF');
+            return;
+        }
+        if (file.size > maxSize) {
+            showNotification('El archivo supera el límite de 5 MB');
+            return;
+        }
+        handleTicketFile(file);
     });
     
     fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleTicketFile(e.target.files[0]);
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        if (files.length > 1) {
+            showNotification('Solo puedes adjuntar un archivo');
+            fileInput.value = '';
+            return;
         }
+        const file = files[0];
+        const maxSize = 5 * 1024 * 1024; // 5 MB
+        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+            showNotification('Solo se permiten archivos PDF');
+            fileInput.value = '';
+            return;
+        }
+        if (file.size > maxSize) {
+            showNotification('El archivo supera el límite de 5 MB');
+            fileInput.value = '';
+            return;
+        }
+        handleTicketFile(file);
     });
 }
 
@@ -1065,9 +1096,15 @@ async function processTicket() {
         });
         
         if (!response.ok) {
-            throw new Error('Error processing ticket');
+            // Try to extract server error message for better debugging
+            let errText = await response.text().catch(() => '');
+            try {
+                const errJson = JSON.parse(errText || '{}');
+                errText = errJson.error || errJson.message || errText;
+            } catch (e) {}
+            throw new Error('Error processing ticket: ' + (errText || response.status));
         }
-        
+
         const data = await response.json();
         
         console.log('📦 Datos recibidos del servidor:', data);
@@ -1099,10 +1136,11 @@ async function processTicket() {
     } catch (error) {
         console.error('Error processing ticket:', error);
         menuLoading.style.display = 'none';
+        const message = (error && error.message) ? error.message : 'No se pudo leer el ticket. Asegúrate de que sea un PDF válido.';
         menuContent.innerHTML = `
             <div class="menu-error">
                 <h3>❌ Error al procesar el ticket</h3>
-                <p>No se pudo leer el ticket. Asegúrate de que sea un PDF válido.</p>
+                <p>${message}</p>
             </div>
         `;
     }
@@ -1163,39 +1201,320 @@ async function generateAlternativeFromTicket(newOption) {
     }
 }
 
-// Renderizar productos encontrados del ticket
+// Variables para el flujo de confirmación de ticket
+let pendingTicketData = null;
+let confirmedProducts = [];
+
+// Renderizar productos encontrados del ticket - MODO CONFIRMACIÓN
 function renderTicketProducts(data) {
     const products = data.products || [];
     const ingredients = data.ingredients || [];
+    const ticketInfo = data.ticketInfo || {};
     
-    if (products.length === 0) {
-        menuContent.innerHTML = `
-            <div class="menu-error">
-                <h3>🔍 No se encontraron productos</h3>
-                <p>No hemos podido identificar productos del ticket en nuestro catálogo.</p>
-                <p style="margin-top: 10px; color: var(--text-muted);">
-                    Ingredientes detectados: ${ingredients.length > 0 ? ingredients.join(', ') : 'Ninguno'}
-                </p>
+    // Guardar datos pendientes para confirmar
+    pendingTicketData = {
+        ticketInfo,
+        ingredients,
+        originalProducts: products
+    };
+    confirmedProducts = [];
+    
+    // Agrupar productos por ingrediente detectado
+    const ingredientMatches = {};
+    for (const ingredient of ingredients) {
+        ingredientMatches[ingredient.name] = products.filter(p => p.matchedIngredient === ingredient.name);
+    }
+    
+    // Ingredientes sin match
+    const unmatchedIngredients = ingredients.filter(ing => !ingredientMatches[ing.name] || ingredientMatches[ing.name].length === 0);
+    const matchedIngredients = ingredients.filter(ing => ingredientMatches[ing.name] && ingredientMatches[ing.name].length > 0);
+    
+    menuContent.innerHTML = `
+        <div class="ticket-confirm-header">
+            <h2>🧾 Confirmar Productos del Ticket</h2>
+            <p>Revisa y confirma los productos detectados. Puedes buscar alternativas si la asociación no es correcta.</p>
+            <div class="ticket-info-bar">
+                <span>📅 Fecha: <strong>${ticketInfo.date || 'No detectada'}</strong></span>
+                <span>💰 Total detectado: <strong>${ticketInfo.total ? formatPrice(ticketInfo.total) : 'No detectado'}</strong></span>
+                <span>📦 Ingredientes: <strong>${ingredients.length}</strong></span>
             </div>
-        `;
+        </div>
+        
+        <div class="ticket-confirm-list" id="ticketConfirmList">
+            ${matchedIngredients.map((ingredient, index) => {
+                const matches = ingredientMatches[ingredient.name] || [];
+                const topMatch = matches[0];
+                return `
+                    <div class="ticket-confirm-item" data-ingredient="${ingredient.name}" data-index="${index}">
+                        <div class="confirm-item-header">
+                            <span class="ingredient-label">📌 Del ticket:</span>
+                            <span class="ingredient-name">${ingredient.name}${ingredient.price ? ` <small>(${formatPrice(ingredient.price)})</small>` : ''}</span>
+                            <span class="match-status ${topMatch ? 'matched' : 'unmatched'}">
+                                ${topMatch ? (topMatch.hasPriceMatch ? '💰✓ Precio coincide' : '✓ Asociado') : '✗ Sin asociar'}
+                            </span>
+                        </div>
+                        <div class="confirm-item-body">
+                            <div class="matched-product" id="matchedProduct${index}">
+                                ${topMatch ? `
+                                    <img src="${topMatch.thumbnail || 'https://via.placeholder.com/60'}" alt="${topMatch.display_name}" onerror="this.src='https://via.placeholder.com/60'">
+                                    <div class="product-info">
+                                        <div class="product-name">${topMatch.display_name}</div>
+                                        <div class="product-category">${topMatch.categoryL2 || ''}</div>
+                                        <div class="product-price">${topMatch.unit_price ? formatPrice(topMatch.unit_price) : 'N/A'}</div>
+                                    </div>
+                                    ${topMatch.suggestions ? `
+                                    <div class="product-suggestions">
+                                        <small>Sugerencias (precio no coincide):</small>
+                                        <div class="suggestion-list">
+                                            ${topMatch.suggestions.map(s => `
+                                                <div class="suggestion-item" onclick='selectProductForTicket(${index}, ${JSON.stringify(s).replace(/'/g, "&#39;")})'>
+                                                    <img src="${s.thumbnail || 'https://via.placeholder.com/40'}" onerror="this.src='https://via.placeholder.com/40'">
+                                                    <span>${s.display_name} — ${s.unit_price ? formatPrice(s.unit_price) : 'N/A'}</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    ` : ''}
+                                    <input type="hidden" class="selected-product-id" value="${topMatch.id}">
+                                    <input type="hidden" class="selected-product-name" value="${topMatch.display_name}">
+                                    <input type="hidden" class="selected-product-price" value="${topMatch.unit_price || 0}">
+                                    <input type="hidden" class="selected-product-category" value="${topMatch.categoryL2 || 'Sin categoría'}">
+                                ` : `
+                                    <div class="no-match">
+                                        <span>❓</span>
+                                        <span>No se encontró producto</span>
+                                    </div>
+                                `}
+                            </div>
+                            <div class="confirm-item-actions">
+                                <button class="btn-change-product" onclick="showProductSearch(${index}, '${ingredient.name.replace(/'/g, "\\'")}')">
+                                    🔍 Buscar otro
+                                </button>
+                                <button class="btn-skip-product" onclick="skipProduct(${index})">
+                                    ❌ Omitir
+                                </button>
+                            </div>
+                        </div>
+                        <div class="product-search-container hidden" id="productSearch${index}">
+                            <input type="text" class="product-search-input" placeholder="Buscar producto..." 
+                                oninput="searchProductForTicket(this.value, ${index})" value="${ingredient.name}">
+                            <div class="product-search-results" id="searchResults${index}"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+            
+            ${unmatchedIngredients.length > 0 ? `
+                <div class="unmatched-section">
+                    <h4>⚠️ Ingredientes sin asociar (${unmatchedIngredients.length})</h4>
+                    ${unmatchedIngredients.map((ingredient, i) => {
+                        const index = matchedIngredients.length + i;
+                        return `
+                            <div class="ticket-confirm-item unmatched" data-ingredient="${ingredient.name}" data-index="${index}">
+                                <div class="confirm-item-header">
+                                    <span class="ingredient-label">📌 Del ticket:</span>
+                                    <span class="ingredient-name">${ingredient.name}${ingredient.price ? ` <small>(${formatPrice(ingredient.price)})</small>` : ''}</span>
+                                    <button class="btn-search-small" onclick="showProductSearch(${index}, '${ingredient.name.replace(/'/g, "\\'")}')">
+                                        🔍 Buscar
+                                    </button>
+                                </div>
+                                <div class="matched-product hidden" id="matchedProduct${index}"></div>
+                                <div class="product-search-container hidden" id="productSearch${index}">
+                                    <input type="text" class="product-search-input" placeholder="Buscar producto..." 
+                                           oninput="searchProductForTicket(this.value, ${index})" value="${ingredient.name}">
+                                    <div class="product-search-results" id="searchResults${index}"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            ` : ''}
+        </div>
+        
+        <div class="ticket-confirm-actions">
+            <button class="btn-cancel-ticket" onclick="closeMenuModal()">
+                ❌ Cancelar
+            </button>
+            <button class="btn-confirm-ticket" onclick="confirmAndSaveTicket()">
+                ✅ Confirmar y Guardar Ticket
+            </button>
+        </div>
+    `;
+}
+
+function showProductSearch(index, ingredient) {
+    const searchContainer = document.getElementById(`productSearch${index}`);
+    searchContainer.classList.toggle('hidden');
+    
+    if (!searchContainer.classList.contains('hidden')) {
+        const input = searchContainer.querySelector('.product-search-input');
+        input.focus();
+        // Trigger initial search
+        searchProductForTicket(ingredient, index);
+    }
+}
+
+let ticketSearchTimeout = null;
+async function searchProductForTicket(query, index) {
+    if (ticketSearchTimeout) clearTimeout(ticketSearchTimeout);
+    
+    const resultsContainer = document.getElementById(`searchResults${index}`);
+    
+    if (query.length < 2) {
+        resultsContainer.innerHTML = '<p class="search-hint">Escribe al menos 2 caracteres</p>';
         return;
     }
     
-    // Contar cuántos ya son favoritos
-    const alreadyFavorites = products.filter(p => userFavoriteProducts.includes(p.id)).length;
+    resultsContainer.innerHTML = '<p class="searching">Buscando...</p>';
+    
+    ticketSearchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            const results = data.results || [];
+            
+            if (results.length === 0) {
+                resultsContainer.innerHTML = '<p class="no-results">No se encontraron productos</p>';
+                return;
+            }
+            
+            resultsContainer.innerHTML = results.slice(0, 8).map(product => `
+                <div class="search-result-item" onclick="selectProductForTicket(${index}, ${JSON.stringify(product).replace(/"/g, '&quot;')})">
+                    <img src="${product.thumbnail || 'https://via.placeholder.com/40'}" alt="${product.display_name}" onerror="this.src='https://via.placeholder.com/40'">
+                    <div class="result-info">
+                        <div class="result-name">${product.display_name}</div>
+                        <div class="result-price">${product.price_instructions?.unit_price ? formatPrice(product.price_instructions.unit_price) : 'N/A'}</div>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Error searching products:', e);
+            resultsContainer.innerHTML = '<p class="search-error">Error al buscar</p>';
+        }
+    }, 300);
+}
+
+function selectProductForTicket(index, product) {
+    const matchedProductDiv = document.getElementById(`matchedProduct${index}`);
+    const searchContainer = document.getElementById(`productSearch${index}`);
+    const itemDiv = document.querySelector(`.ticket-confirm-item[data-index="${index}"]`);
+    
+    const price = product.price_instructions?.unit_price || product.unit_price || 0;
+    const category = product.categoryL2 || product.price_instructions?.categoryL2 || 'Sin categoría';
+    
+    matchedProductDiv.innerHTML = `
+        <img src="${product.thumbnail || 'https://via.placeholder.com/60'}" alt="${product.display_name}" onerror="this.src='https://via.placeholder.com/60'">
+        <div class="product-info">
+            <div class="product-name">${product.display_name}</div>
+            <div class="product-category">${category}</div>
+            <div class="product-price">${formatPrice(price)}</div>
+        </div>
+        <input type="hidden" class="selected-product-id" value="${product.id}">
+        <input type="hidden" class="selected-product-name" value="${product.display_name}">
+        <input type="hidden" class="selected-product-price" value="${price}">
+        <input type="hidden" class="selected-product-category" value="${category}">
+    `;
+    
+    matchedProductDiv.classList.remove('hidden');
+    searchContainer.classList.add('hidden');
+    
+    // Update status
+    const statusSpan = itemDiv.querySelector('.match-status');
+    if (statusSpan) {
+        statusSpan.className = 'match-status matched';
+        statusSpan.textContent = '✓ Asociado';
+    }
+    
+    itemDiv.classList.remove('unmatched');
+    itemDiv.classList.add('confirmed');
+    
+    showNotification(`✅ Producto seleccionado: ${product.display_name}`);
+}
+
+function skipProduct(index) {
+    const itemDiv = document.querySelector(`.ticket-confirm-item[data-index="${index}"]`);
+    const matchedProductDiv = document.getElementById(`matchedProduct${index}`);
+    
+    matchedProductDiv.innerHTML = `
+        <div class="no-match skipped">
+            <span>⏭️</span>
+            <span>Omitido</span>
+        </div>
+    `;
+    
+    const statusSpan = itemDiv.querySelector('.match-status');
+    if (statusSpan) {
+        statusSpan.className = 'match-status skipped';
+        statusSpan.textContent = '⏭️ Omitido';
+    }
+    
+    itemDiv.classList.add('skipped');
+}
+
+function confirmAndSaveTicket() {
+    // Collect all confirmed products
+    const items = document.querySelectorAll('.ticket-confirm-item:not(.skipped)');
+    const products = [];
+    
+    items.forEach(item => {
+        const productId = item.querySelector('.selected-product-id');
+        const productName = item.querySelector('.selected-product-name');
+        const productPrice = item.querySelector('.selected-product-price');
+        const productCategory = item.querySelector('.selected-product-category');
+        
+        if (productId && productName) {
+            products.push({
+                id: productId.value,
+                name: productName.value,
+                price: parseFloat(productPrice?.value || 0),
+                category: productCategory?.value || 'Sin categoría'
+            });
+        }
+    });
+    
+    if (products.length === 0) {
+        showNotification('⚠️ No hay productos para guardar');
+        return;
+    }
+    
+    // Calculate total from confirmed products
+    const total = products.reduce((sum, p) => sum + p.price, 0);
+    
+    const ticketData = {
+        date: pendingTicketData?.ticketInfo?.date || new Date().toISOString().split('T')[0],
+        total: pendingTicketData?.ticketInfo?.total || total,
+        products: products
+    };
+    
+    if (currentUser) {
+        saveTicketToHistory(ticketData);
+        showNotification(`✅ Ticket guardado con ${products.length} productos`);
+        
+        // Save product associations for future automatic matching
+        saveProductAssociations(products);
+    } else {
+        showNotification('⚠️ Inicia sesión para guardar el ticket');
+    }
+    
+    // Show final summary
+    renderConfirmedTicketSummary(ticketData, products);
+}
+
+function renderConfirmedTicketSummary(ticketData, products) {
+    const alreadyFavorites = products.filter(p => userFavoriteProducts.map(String).includes(String(p.id))).length;
     
     menuContent.innerHTML = `
         <div class="ticket-products-header">
-            <h2>🛒 Productos de tu Ticket</h2>
-            <p>Hemos encontrado estos productos de Mercadona que coinciden con tu compra</p>
+            <h2>✅ Ticket Confirmado</h2>
+            <p>Se han guardado los siguientes productos en tu historial</p>
             <div class="ticket-products-stats">
                 <div class="stat-item">
                     <div class="stat-number">${products.length}</div>
-                    <div class="stat-label">Productos encontrados</div>
+                    <div class="stat-label">Productos guardados</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-number">${ingredients.length}</div>
-                    <div class="stat-label">Ingredientes detectados</div>
+                    <div class="stat-number">${formatPrice(ticketData.total)}</div>
+                    <div class="stat-label">Total</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-number">${alreadyFavorites}</div>
@@ -1206,13 +1525,15 @@ function renderTicketProducts(data) {
         
         <div class="ticket-products-grid">
             ${products.map(product => {
-                const isFavorite = userFavoriteProducts.includes(product.id);
+                const isFavorite = userFavoriteProducts.map(String).includes(String(product.id));
+                // Find original product data for thumbnail
+                const originalProduct = pendingTicketData?.originalProducts?.find(p => String(p.id) === String(product.id));
                 return `
                     <div class="ticket-product-card" data-product-id="${product.id}">
-                        <img src="${product.thumbnail || 'https://via.placeholder.com/80'}" alt="${product.display_name}" onerror="this.src='https://via.placeholder.com/80'">
-                        <div class="product-match">📌 ${product.matchedIngredient}</div>
-                        <h4>${product.display_name}</h4>
-                        <div class="product-price">${product.unit_price ? product.unit_price.toFixed(2) + '€' : 'N/A'}</div>
+                        <img src="${originalProduct?.thumbnail || 'https://via.placeholder.com/80'}" alt="${product.name}" onerror="this.src='https://via.placeholder.com/80'">
+                        <h4>${product.name}</h4>
+                        <div class="product-category-tag">${product.category}</div>
+                        <div class="product-price">${formatPrice(product.price)}</div>
                         <button class="btn-add-favorite ${isFavorite ? 'added' : ''}" 
                                 onclick="toggleTicketProductFavorite('${product.id}', this)">
                             ${isFavorite ? '✅ En favoritos' : '❤️ Añadir a favoritos'}
@@ -1223,17 +1544,111 @@ function renderTicketProducts(data) {
         </div>
         
         <div class="ticket-products-actions">
-            <button class="btn-add-all-favorites" onclick="addAllTicketProductsToFavorites()">
+            <button class="btn-add-all-favorites" onclick="addAllConfirmedToFavorites()">
                 ❤️ Añadir todos a favoritos
             </button>
-            <button class="btn-add-to-shopping" onclick="addTicketProductsToShoppingList()">
-                📋 Añadir a lista de compra
+            <button class="btn-view-profile" onclick="closeMenuModal(); showProfileModal();">
+                👤 Ver en Mi Perfil
             </button>
         </div>
     `;
     
-    // Guardar productos para acciones en batch
-    window.currentTicketProducts = products;
+    // Save products for batch actions
+    window.currentTicketProducts = products.map(p => {
+        const original = pendingTicketData?.originalProducts?.find(op => String(op.id) === String(p.id));
+        return original || { id: p.id, display_name: p.name, unit_price: p.price };
+    });
+}
+
+async function saveProductAssociations(products) {
+    try {
+        // Categorías que NO son de comida
+        const nonFoodCategories = [
+            'Bebé',
+            'Cuidado del cabello',
+            'Cuidado facial y corporal', 
+            'Fitoterapia y parafarmacia',
+            'Limpieza y hogar',
+            'Maquillaje',
+            'Mascotas'
+        ];
+        
+        // Collect associations from the confirmation UI
+        const associations = [];
+        const items = document.querySelectorAll('.ticket-confirm-item:not(.skipped)');
+        
+        items.forEach(item => {
+            const ingredient = item.dataset.ingredient;
+            const productId = item.querySelector('.selected-product-id')?.value;
+            const productCategory = item.querySelector('.selected-product-category')?.value;
+            
+            if (ingredient && productId && productCategory && !nonFoodCategories.includes(productCategory)) {
+                associations.push({
+                    ticketItem: ingredient,
+                    productId: productId
+                });
+            }
+        });
+        
+        if (associations.length === 0) return;
+        
+        // Send to server
+        const response = await fetch('/api/save-product-associations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ associations })
+        });
+        
+        const result = await response.json();
+        if (result.saved > 0) {
+            console.log(`💾 Guardadas ${result.saved} asociaciones para matching futuro`);
+        }
+    } catch (error) {
+        console.error('Error saving associations:', error);
+    }
+}
+
+function addAllConfirmedToFavorites() {
+    if (!currentUser) {
+        showNotification('Inicia sesión para guardar favoritos');
+        return;
+    }
+    
+    const products = window.currentTicketProducts || [];
+    products.forEach(async (product) => {
+        if (!userFavoriteProducts.map(String).includes(String(product.id))) {
+            try {
+                await fetch('/api/user/favorites', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-User': currentUser
+                    },
+                    body: JSON.stringify({
+                        productId: String(product.id),
+                        action: 'add'
+                    })
+                });
+                userFavoriteProducts.push(String(product.id));
+            } catch (e) {
+                console.error('Error adding favorite:', e);
+            }
+        }
+    });
+    
+    updateUserFavoritesCount();
+    showNotification(`✅ ${products.length} productos añadidos a favoritos`);
+    
+    // Update buttons
+    document.querySelectorAll('.btn-add-favorite').forEach(btn => {
+        btn.classList.add('added');
+        btn.textContent = '✅ En favoritos';
+    });
+}
+
+function closeMenuModal() {
+    menuModal.classList.remove('active');
+    document.body.style.overflow = '';
 }
 
 // Toggle favorito desde ticket products
@@ -2170,7 +2585,15 @@ function updateUserUI() {
                 </span>
             `;
         } else {
-            currentUserName.textContent = currentUser;
+            // Show initials (first 2 letters of name) when no profile picture
+            const displayName = (oauthUserInfo && oauthUserInfo.name) ? oauthUserInfo.name : currentUser;
+            const initials = displayName.substring(0, 2).toUpperCase();
+            currentUserName.innerHTML = `
+                <span class="oauth-user-info">
+                    <span class="user-initials-avatar">${initials}</span>
+                    <span>${displayName}</span>
+                </span>
+            `;
         }
         
         userFavoritesToggle.style.display = 'flex';
@@ -2304,6 +2727,425 @@ async function showUserFavoritesCategory() {
 
 function isProductFavorited(productId) {
     return userFavoriteProducts.includes(productId);
+}
+
+// ===== Profile, Tickets & Stats Functions =====
+
+let userTickets = [];
+
+function showProfileModal() {
+    if (!currentUser) {
+        showNotification('Debes iniciar sesión para ver tu perfil');
+        return;
+    }
+    
+    document.getElementById('profileModal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+    
+    // Set user name
+    const displayName = (oauthUserInfo && oauthUserInfo.name) ? oauthUserInfo.name : currentUser;
+    document.getElementById('profileUserName').textContent = displayName;
+    
+    // Load tickets by default
+    switchProfileTab('tickets');
+}
+
+function closeProfileModal() {
+    document.getElementById('profileModal').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function switchProfileTab(tab) {
+    // Update tab buttons
+    document.getElementById('tabTickets').classList.remove('active');
+    document.getElementById('tabStats').classList.remove('active');
+    document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
+    
+    // Update content
+    document.getElementById('ticketsTabContent').classList.add('hidden');
+    document.getElementById('statsTabContent').classList.add('hidden');
+    
+    if (tab === 'tickets') {
+        document.getElementById('ticketsTabContent').classList.remove('hidden');
+        loadUserTickets();
+    } else {
+        document.getElementById('statsTabContent').classList.remove('hidden');
+        loadUserStats();
+    }
+}
+
+async function loadUserTickets() {
+    try {
+        const response = await fetch('/api/user/tickets', {
+            headers: { 'X-User': currentUser }
+        });
+        const data = await response.json();
+        userTickets = data.tickets || [];
+        renderTicketsList(userTickets);
+    } catch (e) {
+        console.error('Error loading tickets:', e);
+    }
+}
+
+function renderTicketsList(tickets) {
+    const container = document.getElementById('ticketsList');
+    
+    if (tickets.length === 0) {
+        container.innerHTML = `
+            <div class="empty-tickets">
+                <span>🧾</span>
+                <p>No tienes tickets guardados</p>
+                <small>Sube un ticket de compra y se guardará automáticamente aquí</small>
+            </div>
+        `;
+        return;
+    }
+    
+    // Sort by date descending
+    const sortedTickets = [...tickets].sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    container.innerHTML = sortedTickets.map(ticket => `
+        <div class="ticket-card">
+            <div class="ticket-card-header">
+                <div class="ticket-date">
+                    <span class="ticket-icon">🧾</span>
+                    <span>${formatTicketDate(ticket.date)}</span>
+                </div>
+                <div class="ticket-total">${formatPrice(ticket.total)}</div>
+            </div>
+            <div class="ticket-card-body">
+                <div class="ticket-products-preview">
+                    ${ticket.products.slice(0, 5).map(p => `
+                        <span class="ticket-product-tag">${p.name}</span>
+                    `).join('')}
+                    ${ticket.products.length > 5 ? `<span class="ticket-more">+${ticket.products.length - 5} más</span>` : ''}
+                </div>
+                <div class="ticket-stats">
+                    <span>${ticket.products.length} productos</span>
+                </div>
+            </div>
+            <div class="ticket-card-actions">
+                <button class="btn-ticket-detail" onclick="showTicketDetail('${ticket.hash}')">Ver detalle</button>
+                <button class="btn-ticket-delete" onclick="deleteTicket('${ticket.hash}')">🗑️</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function formatTicketDate(dateStr) {
+    if (!dateStr) return 'Fecha desconocida';
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('es-ES', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+function showTicketDetail(hash) {
+    const ticket = userTickets.find(t => t.hash === hash);
+    if (!ticket) return;
+    
+    const modalContent = `
+        <div class="ticket-detail">
+            <h3>🧾 Ticket del ${formatTicketDate(ticket.date)}</h3>
+            <div class="ticket-detail-total">
+                <span>Total:</span>
+                <span class="total-value">${formatPrice(ticket.total)}</span>
+            </div>
+            <div class="ticket-detail-products">
+                <h4>Productos (${ticket.products.length})</h4>
+                <table class="ticket-products-table">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Categoría</th>
+                            <th>Precio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${ticket.products.map(p => `
+                            <tr>
+                                <td>${p.name}</td>
+                                <td><span class="category-tag">${p.category || 'Sin categoría'}</span></td>
+                                <td>${formatPrice(p.price)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('menuContent').innerHTML = modalContent;
+    document.getElementById('menuLoading').style.display = 'none';
+    document.getElementById('menuModal').classList.add('active');
+}
+
+async function deleteTicket(hash) {
+    if (!confirm('¿Eliminar este ticket de tu historial?')) return;
+    
+    try {
+        await fetch('/api/user/tickets', {
+            method: 'DELETE',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-User': currentUser 
+            },
+            body: JSON.stringify({ ticketHash: hash })
+        });
+        
+        showNotification('Ticket eliminado');
+        loadUserTickets();
+    } catch (e) {
+        console.error('Error deleting ticket:', e);
+    }
+}
+
+async function saveTicketToHistory(ticketData) {
+    if (!currentUser) return;
+    
+    try {
+        const response = await fetch('/api/user/tickets', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-User': currentUser 
+            },
+            body: JSON.stringify({ ticket: ticketData })
+        });
+        
+        const data = await response.json();
+        if (data.success && !data.duplicate) {
+            showNotification('✅ Ticket guardado en tu historial');
+        }
+    } catch (e) {
+        console.error('Error saving ticket:', e);
+    }
+}
+
+async function loadUserStats() {
+    const startDate = document.getElementById('statsStartDate').value;
+    const endDate = document.getElementById('statsEndDate').value;
+    
+    let url = '/api/user/stats';
+    const params = new URLSearchParams();
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    if (params.toString()) url += '?' + params.toString();
+    
+    try {
+        const response = await fetch(url, {
+            headers: { 'X-User': currentUser }
+        });
+        const stats = await response.json();
+        renderStats(stats);
+    } catch (e) {
+        console.error('Error loading stats:', e);
+    }
+}
+
+function renderStats(stats) {
+    // Summary cards
+    document.getElementById('statTotalTickets').textContent = stats.totalTickets || 0;
+    document.getElementById('statTotalSpent').textContent = formatPrice(stats.totalSpent || 0);
+    document.getElementById('statAvgTicket').textContent = stats.totalTickets > 0 
+        ? formatPrice(stats.totalSpent / stats.totalTickets) 
+        : '0,00 €';
+    
+    // Category chart with expandable products
+    const categoryChart = document.getElementById('categoryChart');
+    const categories = Object.entries(stats.categoryBreakdown || {}).sort((a, b) => b[1] - a[1]);
+    const categoryProducts = stats.categoryProducts || {};
+    
+    if (categories.length === 0) {
+        categoryChart.innerHTML = '<p class="no-data">No hay datos disponibles</p>';
+    } else {
+        const maxValue = categories[0][1];
+        categoryChart.innerHTML = categories.slice(0, 15).map(([cat, value], index) => {
+            const products = categoryProducts[cat] || [];
+            const productsList = products.map(p => `
+                <div class="category-product-item">
+                    <span class="product-name">${p.name}</span>
+                    <span class="product-count">${p.count}x</span>
+                    <span class="product-spent">${formatPrice(p.totalSpent)}</span>
+                </div>
+            `).join('');
+            
+            return `
+                <div class="category-accordion" data-category="${index}">
+                    <div class="category-bar-row" onclick="toggleCategoryAccordion(${index})">
+                        <div class="category-expand-icon">▶</div>
+                        <div class="category-name">${cat}</div>
+                        <div class="category-bar-container">
+                            <div class="category-bar" style="width: ${(value / maxValue * 100)}%"></div>
+                        </div>
+                        <div class="category-value">${formatPrice(value)}</div>
+                    </div>
+                    <div class="category-products-list" id="categoryProducts${index}">
+                        <div class="category-products-header">
+                            <span>Productos en "${cat}"</span>
+                            <span>${products.length} productos</span>
+                        </div>
+                        ${productsList || '<p class="no-products">No hay productos</p>'}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    // Top products
+    const topProductsList = document.getElementById('topProductsList');
+    const topProducts = stats.topProducts || [];
+    
+    if (topProducts.length === 0) {
+        topProductsList.innerHTML = '<p class="no-data">No hay datos disponibles</p>';
+    } else {
+        topProductsList.innerHTML = topProducts.slice(0, 10).map((product, i) => `
+            <div class="top-product-row">
+                <span class="product-rank">${i + 1}</span>
+                <span class="product-name">${product.name}</span>
+                <span class="product-count">${product.count}x</span>
+                <span class="product-spent">${formatPrice(product.totalSpent)}</span>
+            </div>
+        `).join('');
+    }
+    
+    // Monthly chart
+    const monthlyChart = document.getElementById('monthlyChart');
+    const months = Object.entries(stats.monthlySpending || {}).sort((a, b) => a[0].localeCompare(b[0]));
+    
+    if (months.length === 0) {
+        monthlyChart.innerHTML = '<p class="no-data">No hay datos disponibles</p>';
+    } else {
+        const maxMonthValue = Math.max(...months.map(m => m[1]));
+        monthlyChart.innerHTML = `
+            <div class="monthly-bars">
+                ${months.map(([month, value]) => {
+                    const [year, monthNum] = month.split('-');
+                    const monthName = new Date(year, parseInt(monthNum) - 1).toLocaleDateString('es-ES', { month: 'short' });
+                    return `
+                        <div class="monthly-bar-col">
+                            <div class="monthly-bar" style="height: ${(value / maxMonthValue * 100)}%"></div>
+                            <div class="monthly-label">${monthName} ${year.slice(2)}</div>
+                            <div class="monthly-value">${formatPrice(value)}</div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+}
+
+function toggleCategoryAccordion(index) {
+    const accordion = document.querySelector(`.category-accordion[data-category="${index}"]`);
+    const productsList = document.getElementById(`categoryProducts${index}`);
+    const icon = accordion.querySelector('.category-expand-icon');
+    
+    if (accordion.classList.contains('expanded')) {
+        accordion.classList.remove('expanded');
+        productsList.style.maxHeight = '0';
+        icon.textContent = '▶';
+    } else {
+        // Close other open accordions
+        document.querySelectorAll('.category-accordion.expanded').forEach(acc => {
+            acc.classList.remove('expanded');
+            acc.querySelector('.category-products-list').style.maxHeight = '0';
+            acc.querySelector('.category-expand-icon').textContent = '▶';
+        });
+        
+        accordion.classList.add('expanded');
+        productsList.style.maxHeight = productsList.scrollHeight + 'px';
+        icon.textContent = '▼';
+    }
+}
+
+function clearDateFilters() {
+    document.getElementById('statsStartDate').value = '';
+    document.getElementById('statsEndDate').value = '';
+    loadUserStats();
+}
+
+function setQuickDateFilter(period) {
+    const today = new Date();
+    let startDate = new Date();
+    
+    switch(period) {
+        case 'week':
+            startDate.setDate(today.getDate() - 7);
+            break;
+        case 'month':
+            startDate.setMonth(today.getMonth() - 1);
+            break;
+        case '3months':
+            startDate.setMonth(today.getMonth() - 3);
+            break;
+        case 'year':
+            startDate = new Date(today.getFullYear(), 0, 1);
+            break;
+        case 'all':
+            document.getElementById('statsStartDate').value = '';
+            document.getElementById('statsEndDate').value = '';
+            loadUserStats();
+            return;
+    }
+    
+    document.getElementById('statsStartDate').value = startDate.toISOString().split('T')[0];
+    document.getElementById('statsEndDate').value = today.toISOString().split('T')[0];
+    loadUserStats();
+}
+
+// Function to extract date and total from ticket text
+function parseTicketInfo(ticketText) {
+    let date = null;
+    let total = null;
+    
+    // Try to find date patterns (DD/MM/YYYY or similar)
+    const datePatterns = [
+        /(\d{2}\/\d{2}\/\d{4})/,
+        /(\d{2}-\d{2}-\d{4})/,
+        /(\d{4}-\d{2}-\d{2})/
+    ];
+    
+    for (const pattern of datePatterns) {
+        const match = ticketText.match(pattern);
+        if (match) {
+            const parts = match[1].split(/[\/\-]/);
+            if (parts[0].length === 4) {
+                date = `${parts[0]}-${parts[1]}-${parts[2]}`;
+            } else {
+                date = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+            break;
+        }
+    }
+    
+    // If no date found, use current date
+    if (!date) {
+        date = new Date().toISOString().split('T')[0];
+    }
+    
+    // Try to find total (looking for patterns like "TOTAL" followed by amount)
+    const totalPatterns = [
+        /total[:\s]+(\d+[,\.]\d{2})/i,
+        /importe[:\s]+(\d+[,\.]\d{2})/i,
+        /(\d+[,\.]\d{2})\s*€?\s*$/m
+    ];
+    
+    for (const pattern of totalPatterns) {
+        const match = ticketText.match(pattern);
+        if (match) {
+            total = parseFloat(match[1].replace(',', '.'));
+            break;
+        }
+    }
+    
+    return { date, total };
 }
 
 // ===== Initialize App =====
