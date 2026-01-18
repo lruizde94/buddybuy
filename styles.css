@@ -4704,3 +4704,40 @@ body {
 
 /* Small spacing tweak so they don't touch the footer */
 #floatingControls { bottom: 56px; }
+
+/* Button color palette overrides requested by user */
+#floatingControls .ticket-toggle {
+    /* white background with soft border for ticket */
+    background: var(--white) !important;
+    color: var(--secondary-color) !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.06) !important;
+}
+
+#floatingControls .shopping-list-toggle {
+    /* blue gradient for shopping list */
+    background: linear-gradient(135deg, #90CAF9 0%, #1E88E5 100%) !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+#floatingControls .favorites-toggle {
+    /* pastel yellow */
+    background: linear-gradient(135deg, #FFF8E1 0%, #FFE0B2 100%) !important;
+    color: var(--secondary-color) !important;
+    border: 1px solid rgba(0,0,0,0.04) !important;
+}
+
+#floatingControls .ingredients-toggle {
+    /* pastel mint */
+    background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%) !important;
+    color: var(--secondary-color) !important;
+    border: 1px solid rgba(0,0,0,0.04) !important;
+}
+
+#floatingControls .user-favorites-toggle {
+    /* pastel pink for user favorites */
+    background: linear-gradient(135deg, #FFEFF2 0%, #FFD1E0 100%) !important;
+    color: var(--secondary-color) !important;
+    border: 1px solid rgba(0,0,0,0.04) !important;
+}
