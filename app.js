@@ -2626,7 +2626,10 @@ function updateUserUI() {
             favoritesToggle.style.display = 'flex';
             favoritesToggle.onclick = () => showFavoritesModal();
         }
-        if (generateMenu) generateMenu.removeAttribute('disabled');
+        if (generateMenu) {
+            generateMenu.removeAttribute('disabled');
+            generateMenu.style.display = '';
+        }
     } else {
         userInfo.style.display = 'none';
         loginPrompt.style.display = 'flex';
@@ -2644,7 +2647,10 @@ function updateUserUI() {
             favoritesToggle.style.display = 'none';
             favoritesToggle.onclick = null;
         }
-        if (generateMenu) generateMenu.setAttribute('disabled', 'true');
+        if (generateMenu) {
+            generateMenu.setAttribute('disabled', 'true');
+            generateMenu.style.display = 'none';
+        }
     }
 }
 

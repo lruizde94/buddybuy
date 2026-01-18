@@ -4490,6 +4490,19 @@ body {
     pointer-events: auto;
 }
 
+/* By default hide protected actions (ticket, shopping list, favorites) until JS enables them for logged users */
+.ticket-toggle,
+.shopping-list-toggle,
+.favorites-toggle,
+.user-favorites-toggle {
+    display: none !important;
+}
+
+/* Hide generate menu button by default; JS will enable/show it for logged users */
+#generateMenu {
+    display: none !important;
+}
+
 /* Position each control relative to center (fine-tune spacing here) */
 .ingredients-toggle { transform: translateX(-110px); z-index: 103; }
 .favorites-toggle { transform: translateX(0); z-index: 104; }
