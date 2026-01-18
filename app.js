@@ -114,6 +114,8 @@ function normalizeText(str) {
     }
 }
 
+// Image-based ticket processing removed (OCR disabled)
+
 function formatPrice(price) {
     return new Intl.NumberFormat('es-ES', {
         style: 'currency',
@@ -404,6 +406,10 @@ function openProductModal(product) {
             ${previousPrice ? `<span class="modal-old-price">${formatPrice(parseFloat(previousPrice))}</span>` : ''}
             ${bulkPrice ? `<p class="modal-unit-price">${formatPrice(bulkPrice)} / ${sizeFormat}</p>` : ''}
         </div>
+        <div class="modal-sparkline" style="text-align:center; margin-top:10px;">
+            <canvas id="priceSparkline" width="160" height="40" style="border:0; background:transparent"></canvas>
+            <div style="font-size:11px; color:#666; margin-top:4px;">Últimos 90 días</div>
+        </div>
         
         ${product.share_url ? `
             <div style="text-align: center;">
@@ -416,11 +422,59 @@ function openProductModal(product) {
 
     productModal.classList.add('active');
     document.body.style.overflow = 'hidden';
+    // Fetch and render price history sparkline
+    try {
+        fetchAndRenderPriceHistory(product.id);
+    } catch (e) {
+        console.error('Error rendering price history:', e);
+    }
 }
 
 function closeProductModal() {
     productModal.classList.remove('active');
     document.body.style.overflow = '';
+}
+
+// Fetch price history and draw a small sparkline on the modal's canvas
+async function fetchAndRenderPriceHistory(productId, days = 90) {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/price-history?productId=${encodeURIComponent(productId)}&days=${days}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!Array.isArray(data) || data.length === 0) return;
+        const canvas = document.getElementById('priceSparkline');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0,0,w,h);
+
+        // Prepare points
+        const prices = data.map(d => Number(d.price));
+        const min = Math.min(...prices);
+        const max = Math.max(...prices);
+        const range = (max - min) || 1;
+
+        ctx.strokeStyle = '#1f8feb';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < prices.length; i++) {
+            const x = (i / (prices.length - 1)) * (w - 4) + 2;
+            const y = h - 2 - ((prices[i] - min) / range) * (h - 6);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Draw last price dot
+        const lastX = ((prices.length - 1) / (prices.length - 1)) * (w - 4) + 2;
+        const lastY = h - 2 - ((prices[prices.length - 1] - min) / range) * (h - 6);
+        ctx.fillStyle = '#1f8feb';
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
+        ctx.fill();
+    } catch (e) {
+        console.error('fetchAndRenderPriceHistory error', e);
+    }
 }
 
 // ===== Search Functions =====
@@ -430,38 +484,35 @@ async function searchProducts(query) {
         categoryTitle.textContent = 'Resultados de búsqueda';
         return;
     }
+
     showLoading();
     categoryTitle.textContent = `Buscando: "${query}"`;
 
-    // Fetch all categories and search through products
-    const categories = await fetchCategories();
-    let allProducts = [];
-    const qnorm = normalizeText(query);
+    try {
+        const resp = await fetch(`${API_BASE_URL}/search?query=${encodeURIComponent(query)}`);
+        if (!resp.ok) throw new Error('Error en búsqueda');
+        const body = await resp.json();
+        const results = body.results || [];
 
-    for (const category of categories) {
-        for (const subcategory of (category.categories || [])) {
-            const subcatData = await fetchSubcategoryProducts(subcategory.id);
-            for (const cat of subcatData) {
-                if (cat.products) {
-                    for (const product of cat.products) {
-                        const nameNorm = normalizeText(product.display_name || product.nombre || '');
-                        if (nameNorm.includes(qnorm)) {
-                            allProducts.push({
-                                ...product,
-                                categoryL1: category.name,
-                                categoryL2: subcategory.name,
-                                categoryL3: cat.name
-                            });
-                        }
-                    }
-                }
-            }
-        }
+        // Normalize results to the shape expected by renderProducts
+        currentProducts = results.map(p => ({
+            id: p.id,
+            display_name: p.display_name || p.nombre || '',
+            packaging: p.packaging || '',
+            thumbnail: p.thumbnail || p.imagen || '',
+            share_url: p.share_url || p.url || '',
+            categoryL2: p.categoryL2 || p.categoria_L2 || '',
+            categoryL3: p.categoryL3 || p.categoria_L3 || '',
+            price_instructions: p.price_instructions || {}
+        }));
+
+        hideLoading();
+        renderProducts(currentProducts);
+    } catch (error) {
+        console.error('Error fetching search results:', error);
+        hideLoading();
+        renderProducts([]);
     }
-
-    currentProducts = allProducts;
-    hideLoading();
-    renderProducts(allProducts);
 }
 
 function performQuickSearch(query) {
@@ -605,16 +656,18 @@ function addIngredient(product) {
         showLoginModal();
         return;
     }
-    const exists = selectedIngredients.find(i => i.id === product.id);
+    // Normalize id to string to avoid duplicates caused by type differences
+    const pid = String(product.id || product.productId || product.name || 'id_' + Date.now());
+    const exists = selectedIngredients.find(i => String(i.id) === pid);
     if (exists) {
-        removeIngredient(product.id);
+        showNotification('Este ingrediente ya está en la lista');
         return;
     }
 
     selectedIngredients.push({
-        id: product.id,
-        name: product.display_name,
-        thumbnail: product.thumbnail
+        id: pid,
+        name: product.display_name || product.name || '',
+        thumbnail: product.thumbnail || product.imagen || ''
     });
 
     updateIngredientsUI();
@@ -802,17 +855,25 @@ function renderMenu(data, ingredientNames, fromTicket = false) {
                 <div class="recipe-header">
                     <span class="recipe-number">${index + 1}</span>
                     <h3 class="recipe-title">${recipe.name}</h3>
-                    <button class="btn-save-recipe ${isRecipeFavorited(recipe.name) ? 'saved' : ''}" 
-                            onclick="toggleRecipeFavorite(${index})" 
-                            title="Guardar receta">
-                        ${isRecipeFavorited(recipe.name) ? '⭐' : '☆'}
-                    </button>
+                        <div class="recipe-actions">
+                            <button class="btn-save-recipe ${isRecipeFavorited(recipe.name) ? 'saved' : ''}" 
+                                    onclick="toggleRecipeFavorite(${index})" 
+                                    title="Guardar receta">
+                                ${isRecipeFavorited(recipe.name) ? '⭐' : '☆'}
+                            </button>
+                            <button class="btn-share-recipe" onclick="shareRecipe(${index})" title="Compartir receta">🔗</button>
+                        </div>
                 </div>
                 <div class="recipe-meta">
                     <span>⏱️ ${recipe.time || 'N/A'}</span>
                     <span>📊 ${recipe.difficulty || 'N/A'}</span>
                     <span>👥 ${recipe.servings || 'N/A'}</span>
                 </div>
+                ${recipe.nutrition ? `
+                <div class="recipe-nutrition">
+                    🔬 Nutrición (por 100 g): ${recipe.nutrition.kcal_per_100g || 0} kcal · Grasa ${recipe.nutrition.fat_g || 0} g · Hidratos ${recipe.nutrition.carbs_g || 0} g · Proteína ${recipe.nutrition.protein_g || 0} g
+                </div>
+                ` : ''}
                 <div class="recipe-section">
                     <h4>📝 Ingredientes</h4>
                     <ul>
@@ -825,14 +886,232 @@ function renderMenu(data, ingredientNames, fromTicket = false) {
                         ${recipe.steps.map(step => `<li>${step}</li>`).join('')}
                     </ul>
                 </div>
+                <div style="text-align:center; margin-top:12px;">
+                    <button class="btn-primary" onclick="window.openCookModal(${index})">Empezar a cocinar</button>
+                </div>
             </div>
         `).join('')}
     `;
 }
 
+// Share recipe: create share token on server and present share options
+async function shareRecipe(recipeIndex) {
+    const recipes = window.currentRecipes || [];
+    const recipe = recipes[recipeIndex];
+    if (!recipe) return;
+    try {
+        const resp = await fetch('/api/share-recipe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ recipe })
+        });
+        if (!resp.ok) throw new Error('Error creating share');
+        const data = await resp.json();
+        // Only allow sharing between users: ask recipient username
+        const sendTo = prompt('Comparte esta receta con otro usuario (escribe su nombre de usuario):', '');
+        if (!sendTo || !sendTo.trim()) {
+            alert('Compartir cancelado: no se proporcionó usuario destino.');
+            return;
+        }
+        try {
+            const sresp = await fetch('/api/share-to-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: data.token, toUser: sendTo.trim(), fromUser: (localStorage.getItem('currentUser')||null) })
+            });
+            if (sresp.ok) alert('✅ Receta compartida con ' + sendTo.trim());
+            else {
+                const err = await sresp.json().catch(()=>({}));
+                alert('No se pudo enviar al usuario: ' + (err.error || sresp.statusText));
+            }
+        } catch (e) {
+            console.error('Error enviando al usuario', e);
+            alert('Error enviando al usuario');
+        }
+    } catch (e) {
+        console.error('shareRecipe error', e);
+        alert('Error compartiendo receta');
+    }
+}
+
 function closeMenuModal() {
     menuModal.classList.remove('active');
     document.body.style.overflow = '';
+}
+
+// ===== Cooking modal logic =====
+let cookState = {
+    recipe: null,
+    currentStep: 0,
+    timerInterval: null,
+    timerRemaining: 0
+};
+
+window.openCookModal = function(recipeIndex) {
+    console.log('openCookModal called with', recipeIndex);
+    const recipes = window.currentRecipes || [];
+    const recipe = recipes[recipeIndex];
+    if (!recipe) { console.warn('Recipe not found for index', recipeIndex); return; }
+    cookState.recipe = recipe;
+    cookState.currentStep = 0;
+    cookState.timerInterval && clearInterval(cookState.timerInterval);
+    cookState.timerInterval = null;
+    cookState.timerRemaining = 0;
+
+    const modal = document.getElementById('cookModal');
+    if (modal) modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    renderCookModal();
+}
+
+function closeCookModal() {
+    const modal = document.getElementById('cookModal');
+    if (modal) modal.classList.remove('active');
+    document.body.style.overflow = '';
+    cookState.timerInterval && clearInterval(cookState.timerInterval);
+    cookState.timerInterval = null;
+    // Ensure stop button disabled when modal closed
+    const stopBtn = document.getElementById('stopTimerBtn');
+    if (stopBtn) stopBtn.disabled = true;
+}
+
+function renderCookModal() {
+    const recipe = cookState.recipe;
+    if (!recipe) return;
+    document.getElementById('cookRecipeTitle').textContent = recipe.name || 'Receta';
+
+    // Render steps list
+    const stepsList = document.getElementById('cookStepsList');
+    stepsList.innerHTML = '';
+    (recipe.steps || []).forEach((step, idx) => {
+        const div = document.createElement('div');
+        div.className = 'cook-step-item' + (idx === cookState.currentStep ? ' active' : '');
+        div.textContent = `${idx + 1}. ${step.substring(0, 60)}${step.length>60? '…':''}`;
+        div.onclick = () => { goToCookStep(idx); };
+        stepsList.appendChild(div);
+    });
+
+    showCookStep(cookState.currentStep);
+}
+
+function showCookStep(idx) {
+    const recipe = cookState.recipe;
+    if (!recipe || !recipe.steps || idx < 0 || idx >= recipe.steps.length) return;
+    cookState.currentStep = idx;
+    const stepText = recipe.steps[idx];
+    document.getElementById('cookStepNumber').textContent = `Paso ${idx + 1} de ${recipe.steps.length}`;
+    document.getElementById('cookStepText').textContent = stepText;
+
+    // highlight active in list
+    document.querySelectorAll('.cook-step-item').forEach((el, i) => {
+        el.classList.toggle('active', i === idx);
+    });
+
+    // Timer area: detect durations like '10 minutos', '30 min', '2 horas', '45s'
+    const timerArea = document.getElementById('cookTimerArea');
+    timerArea.innerHTML = '';
+    const seconds = parseDurationToSeconds(stepText);
+    // store original seconds for this step so stopping resets to it
+    cookState.originalTimerSeconds = seconds || 0;
+    if (seconds > 0) {
+        const timerDiv = document.createElement('div');
+        timerDiv.className = 'cook-timer';
+        const display = document.createElement('span');
+        display.id = 'cookTimerDisplay';
+        display.textContent = formatSeconds(seconds);
+        const startBtn = document.createElement('button');
+        startBtn.id = 'startCookBtn';
+        startBtn.textContent = 'Iniciar temporizador';
+        startBtn.onclick = () => startCookTimer(seconds, startBtn);
+        timerDiv.appendChild(display);
+        timerDiv.appendChild(startBtn);
+        timerArea.appendChild(timerDiv);
+
+        // Ensure stop button reflects current timer state
+        const stopBtn = document.getElementById('stopTimerBtn');
+        if (stopBtn) stopBtn.disabled = !cookState.timerInterval;
+
+        // Ensure start button is enabled when showing the step
+        if (startBtn) startBtn.disabled = false;
+    }
+}
+
+function goToCookStep(idx) { showCookStep(idx); }
+function prevCookStep() { showCookStep(Math.max(0, cookState.currentStep - 1)); }
+function nextCookStep() { showCookStep(Math.min((cookState.recipe.steps.length -1), cookState.currentStep + 1)); }
+
+function parseDurationToSeconds(text) {
+    if (!text) return 0;
+    // match hours/minutes/seconds
+    const patterns = [
+        { rx: /(\d+)\s*h(?:oras?)?/i, mul: 3600 },
+        { rx: /(\d+)\s*horas?/i, mul: 3600 },
+        { rx: /(\d+)\s*min(?:utos?)?/i, mul: 60 },
+        { rx: /(\d+)\s*mins?/i, mul: 60 },
+        { rx: /(\d+)\s*s(?:egundos?)?/i, mul: 1 },
+        { rx: /(\d+)\s*seg(?:undos?)?/i, mul: 1 }
+    ];
+    for (const p of patterns) {
+        const m = text.match(p.rx);
+        if (m) return parseInt(m[1],10) * p.mul;
+    }
+    // fallback: numbers followed by 'min' with no space
+    const m2 = text.match(/(\d+)min\b/i);
+    if (m2) return parseInt(m2[1],10) * 60;
+    return 0;
+}
+
+function formatSeconds(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function startCookTimer(seconds, startBtn) {
+    // clear existing
+    if (cookState.timerInterval) clearInterval(cookState.timerInterval);
+    cookState.timerRemaining = seconds;
+    const display = document.getElementById('cookTimerDisplay');
+    if (startBtn) startBtn.disabled = true;
+    display && (display.textContent = formatSeconds(cookState.timerRemaining));
+
+    // enable stop button
+    const stopBtn = document.getElementById('stopTimerBtn');
+    if (stopBtn) stopBtn.disabled = false;
+
+    cookState.timerInterval = setInterval(() => {
+        cookState.timerRemaining -= 1;
+        if (cookState.timerRemaining < 0) {
+            clearInterval(cookState.timerInterval);
+            cookState.timerInterval = null;
+            if (display) display.textContent = '00:00';
+            alert('⏰ Tiempo finalizado');
+            if (startBtn) startBtn.disabled = false;
+            if (stopBtn) stopBtn.disabled = true;
+            return;
+        }
+        if (display) display.textContent = formatSeconds(cookState.timerRemaining);
+    }, 1000);
+}
+
+function stopCookTimer() {
+    if (cookState.timerInterval) {
+        clearInterval(cookState.timerInterval);
+        cookState.timerInterval = null;
+    }
+    // Reset remaining to the original value for the step (do not set to 0)
+    const original = cookState.originalTimerSeconds || 0;
+    cookState.timerRemaining = original;
+    const display = document.getElementById('cookTimerDisplay');
+    if (display) display.textContent = formatSeconds(original);
+
+    // Re-enable start button if present
+    const startBtn = document.getElementById('startCookBtn');
+    if (startBtn) startBtn.disabled = false;
+
+    // Disable stop button
+    const stopBtn = document.getElementById('stopTimerBtn');
+    if (stopBtn) stopBtn.disabled = true;
 }
 
 // ===== Favorites Functions =====
@@ -1016,16 +1295,16 @@ function closeTicketModal() {
 function setupTicketDragDrop() {
     const uploadArea = document.getElementById('ticketUploadArea');
     const fileInput = document.getElementById('ticketFileInput');
-    
+
     uploadArea.addEventListener('dragover', (e) => {
         e.preventDefault();
         uploadArea.classList.add('dragover');
     });
-    
+
     uploadArea.addEventListener('dragleave', () => {
         uploadArea.classList.remove('dragover');
     });
-    
+
     uploadArea.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadArea.classList.remove('dragover');
@@ -1050,7 +1329,7 @@ function setupTicketDragDrop() {
         }
         handleTicketFile(file);
     });
-    
+
     fileInput.addEventListener('change', (e) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
@@ -1081,6 +1360,10 @@ function handleTicketFile(file) {
     document.getElementById('ticketFileInfo').classList.remove('hidden');
     document.getElementById('ticketFileName').textContent = file.name;
     updateProcessButton();
+}
+
+function handleTicketImage(file) {
+    // image uploads disabled; no-op
 }
 
 function removeTicketFile() {
@@ -1118,7 +1401,6 @@ function resetTicketForm() {
 
 async function processTicket() {
     if (!ticketFile) return;
-
     const currentFile = ticketFile;
     const formData = new FormData();
     formData.append('ticket', currentFile);
@@ -2590,29 +2872,45 @@ async function showLoginModal() {
     const modal = document.getElementById('loginModal');
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
-    
-    // Load existing test users (exclude OAuth users)
+    // Decide whether to show test-user UI based on server config
     try {
-        const response = await fetch('/api/users');
-        const data = await response.json();
-        
-        if (data.users && data.users.length > 0) {
-            // Filter out OAuth users (they start with 'google_')
-            const testUsers = data.users.filter(user => !user.startsWith('google_'));
-            
-            if (testUsers.length > 0) {
-                const existingUsers = document.getElementById('existingUsers');
-                const usersList = document.getElementById('usersList');
-                
-                usersList.innerHTML = testUsers.map(user => 
-                    `<button class="user-btn" onclick="quickLogin('${user}')">${user}</button>`
-                ).join('');
-                
-                existingUsers.style.display = 'block';
+        const confResp = await fetch('/api/config');
+        if (confResp.ok) {
+            const conf = await confResp.json();
+            const allow = !!conf.allowTestUsers;
+            const loginDivider = document.querySelector('.login-divider');
+            const existingUsers = document.getElementById('existingUsers');
+            const usersList = document.getElementById('usersList');
+            const usernameInput = document.getElementById('usernameInput');
+            const testBtn = document.querySelector('.btn-test-login');
+
+            if (!allow) {
+                if (loginDivider) loginDivider.style.display = 'none';
+                if (existingUsers) existingUsers.style.display = 'none';
+                if (usernameInput) usernameInput.style.display = 'none';
+                if (testBtn) testBtn.style.display = 'none';
+                return; // do not load test users
+            }
+
+            // Load existing test users (exclude OAuth users)
+            try {
+                const response = await fetch('/api/users');
+                const data = await response.json();
+                if (data.users && data.users.length > 0) {
+                    const testUsers = data.users.filter(user => !user.startsWith('google_'));
+                    if (testUsers.length > 0) {
+                        usersList.innerHTML = testUsers.map(user => 
+                            `<button class="user-btn" onclick="quickLogin('${user}')">${user}</button>`
+                        ).join('');
+                        existingUsers.style.display = 'block';
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading users:', e);
             }
         }
     } catch (e) {
-        console.error('Error loading users:', e);
+        console.error('Error loading config:', e);
     }
     
     document.getElementById('usernameInput').focus();
@@ -2945,7 +3243,17 @@ function showProfileModal() {
     
     // Set user name
     const displayName = (oauthUserInfo && oauthUserInfo.name) ? oauthUserInfo.name : currentUser;
-    document.getElementById('profileUserName').textContent = displayName;
+    const profileUserNameEl = document.getElementById('profileUserName');
+    // Clear and insert display name + user id used for sharing
+    profileUserNameEl.innerHTML = '';
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'profile-display-name';
+    nameDiv.textContent = displayName;
+    const idDiv = document.createElement('div');
+    idDiv.className = 'profile-user-id';
+    idDiv.textContent = 'ID: ' + (currentUser || '');
+    profileUserNameEl.appendChild(nameDiv);
+    profileUserNameEl.appendChild(idDiv);
     
     // Load tickets by default
     switchProfileTab('tickets');

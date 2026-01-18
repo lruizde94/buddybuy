@@ -1,0 +1,60 @@
+{
+  "09bc4871335fda4018ed3e94e7c0c5a1": {
+    "recipe": {
+      "name": "Puchero Trío de Carnes",
+      "time": "90 min",
+      "difficulty": "Media",
+      "servings": "6 personas",
+      "ingredients": [
+        "Arreglo para puchero vacuno 500g",
+        "Arreglo para puchero cerdo 300g",
+        "Arreglo para puchero pollo 300g",
+        "Nata ligera para cocinar Hacendado 200ml",
+        "Verduras al gusto (patatas, zanahorias, nabos) 500g"
+      ],
+      "steps": [
+        "En una olla grande, hervir agua y agregar todas las carnes.",
+        "Añadir las verduras y cocinar a fuego lento durante 1 hora.",
+        "Retirar las carnes, desmenuzarlas y añadir de nuevo a la olla.",
+        "Incorporar la nata ligera y cocinar por 10 minutos más."
+      ],
+      "nutrition": {
+        "kcal_per_100g": 150,
+        "fat_g": 8,
+        "carbs_g": 10,
+        "protein_g": 12
+      }
+    },
+    "createdAt": "2026-01-18T19:20:37.816Z",
+    "expiresAt": "2026-02-17T19:20:37.816Z"
+  },
+  "ded5986b248fd1f668b2d0c6e808bc87": {
+    "recipe": {
+      "name": "Puchero Trío de Carnes",
+      "time": "90 min",
+      "difficulty": "Media",
+      "servings": "6 personas",
+      "ingredients": [
+        "Arreglo para puchero vacuno 500g",
+        "Arreglo para puchero cerdo 300g",
+        "Arreglo para puchero pollo 300g",
+        "Nata ligera para cocinar Hacendado 200ml",
+        "Verduras al gusto (patatas, zanahorias, nabos) 500g"
+      ],
+      "steps": [
+        "En una olla grande, hervir agua y agregar todas las carnes.",
+        "Añadir las verduras y cocinar a fuego lento durante 1 hora.",
+        "Retirar las carnes, desmenuzarlas y añadir de nuevo a la olla.",
+        "Incorporar la nata ligera y cocinar por 10 minutos más."
+      ],
+      "nutrition": {
+        "kcal_per_100g": 150,
+        "fat_g": 8,
+        "carbs_g": 10,
+        "protein_g": 12
+      }
+    },
+    "createdAt": "2026-01-18T19:24:26.595Z",
+    "expiresAt": "2026-02-17T19:24:26.595Z"
+  }
+}

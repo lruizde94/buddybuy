@@ -3,6 +3,8 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
+// OpenAI helper removed (OCR feature disabled)
 
 // Cargar variables de entorno desde .env
 function loadEnvFile() {
@@ -117,6 +119,8 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/google/callback';
+// Habilitar o deshabilitar usuarios de prueba (login local)
+const ALLOW_TEST_USERS = (typeof process.env.ALLOW_TEST_USERS === 'undefined') ? true : (String(process.env.ALLOW_TEST_USERS).toLowerCase() === 'true');
 
 // Archivos de datos locales
 const DATA_DIR = path.join(__dirname, 'data');
@@ -125,6 +129,8 @@ const CATEGORIAS_FILE = path.join(DATA_DIR, 'categorias.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 const ASSOCIATIONS_FILE = path.join(DATA_DIR, 'product_associations.json');
+const PRICE_HISTORY_FILE = path.join(DATA_DIR, 'price_history.json');
+const SHARED_RECIPES_FILE = path.join(DATA_DIR, 'shared_recipes.json');
 
 // Cache de datos en memoria
 let productosCache = null;
@@ -132,6 +138,8 @@ let categoriasCache = null;
 let usersCache = {};
 let sessionsCache = {};
 let associationsCache = {}; // { "normalized_ticket_item": { productId: "id", originalName: "name" } }
+let priceHistory = {}; // { productId: [ { date: 'YYYY-MM-DD', price: 1.23 }, ... ] }
+let sharedRecipes = {}; // { token: { recipe, createdAt, expiresAt } }
 // Search index and query cache for faster lookups
 let searchIndex = null; // { tokenMap: Map(token -> Set(productIndex)), products: Array(products), normNames: Array }
 const queryCache = new Map(); // simple LRU-like cache
@@ -159,6 +167,22 @@ function loadLocalData() {
         if (fs.existsSync(ASSOCIATIONS_FILE)) {
             associationsCache = JSON.parse(fs.readFileSync(ASSOCIATIONS_FILE, 'utf-8'));
             console.log(`🔗 Cargadas ${Object.keys(associationsCache).length} asociaciones de productos`);
+        }
+        if (fs.existsSync(PRICE_HISTORY_FILE)) {
+            try {
+                priceHistory = JSON.parse(fs.readFileSync(PRICE_HISTORY_FILE, 'utf-8')) || {};
+                console.log(`💾 Cargado historial de precios para ${Object.keys(priceHistory).length} productos`);
+            } catch (e) {
+                priceHistory = {};
+            }
+        }
+        if (fs.existsSync(SHARED_RECIPES_FILE)) {
+            try {
+                sharedRecipes = JSON.parse(fs.readFileSync(SHARED_RECIPES_FILE, 'utf-8')) || {};
+                console.log(`🔗 Cargados ${Object.keys(sharedRecipes).length} enlaces compartidos`);
+            } catch (e) {
+                sharedRecipes = {};
+            }
         }
         // Build search index after loading products
         buildSearchIndex();
@@ -292,6 +316,50 @@ function saveAssociations() {
     } catch (error) {
         console.error('Error guardando asociaciones:', error);
     }
+}
+
+// Guardar historial de precios en archivo
+function savePriceHistory() {
+    try {
+        if (!fs.existsSync(DATA_DIR)) {
+            fs.mkdirSync(DATA_DIR, { recursive: true });
+        }
+        fs.writeFileSync(PRICE_HISTORY_FILE, JSON.stringify(priceHistory, null, 2));
+    } catch (error) {
+        console.error('Error guardando price history:', error);
+    }
+}
+
+function saveSharedRecipes() {
+    try {
+        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(SHARED_RECIPES_FILE, JSON.stringify(sharedRecipes, null, 2));
+    } catch (error) {
+        console.error('Error guardando shared recipes:', error);
+    }
+}
+
+// Registrar snapshot diario de precios (uno por día)
+function recordPriceSnapshot() {
+    if (!productosCache || !productosCache.productos) return;
+    const today = new Date().toISOString().split('T')[0];
+    const maxEntries = 365;
+
+    for (const p of productosCache.productos) {
+        const id = String(p.id);
+        const price = p.precio || null;
+        if (price === null || price === undefined) continue;
+        if (!priceHistory[id]) priceHistory[id] = [];
+        const arr = priceHistory[id];
+        const last = arr.length ? arr[arr.length - 1] : null;
+        if (last && last.date === today) continue; // already recorded today
+        arr.push({ date: today, price: price });
+        // Trim history
+        if (arr.length > maxEntries) arr.splice(0, arr.length - maxEntries);
+    }
+
+    savePriceHistory();
+    console.log(`💾 Price snapshot recorded for ${Object.keys(productosCache.productos || {}).length} products on ${today}`);
 }
 
 // Crear nueva sesión
@@ -574,11 +642,22 @@ const server = http.createServer((req, res) => {
     }
 
     // ===== User API Endpoints =====
+    // Config endpoint (expose feature toggles to frontend)
+    if (req.url === '/api/config' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ allowTestUsers: !!ALLOW_TEST_USERS }));
+        return;
+    }
     
     // Login/Register user (GET users, POST to login/create)
     if (req.url === '/api/users' && req.method === 'GET') {
+        // If test users disabled, only return OAuth users (start with 'google_')
+        let users = Object.keys(usersCache);
+        if (!ALLOW_TEST_USERS) {
+            users = users.filter(u => u.startsWith('google_'));
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ users: Object.keys(usersCache) }));
+        res.end(JSON.stringify({ users }));
         return;
     }
     
@@ -595,7 +674,14 @@ const server = http.createServer((req, res) => {
                 }
                 
                 const cleanUsername = username.trim().toLowerCase();
-                
+
+                // If test users are disabled, block local/test user creation (non-OAuth)
+                if (!ALLOW_TEST_USERS && !cleanUsername.startsWith('google_')) {
+                    res.writeHead(403, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Test users are disabled on this installation' }));
+                    return;
+                }
+
                 // Create user if doesn't exist
                 if (!usersCache[cleanUsername]) {
                     usersCache[cleanUsername] = {
@@ -606,7 +692,7 @@ const server = http.createServer((req, res) => {
                     saveUsers();
                     console.log(`👤 Nuevo usuario creado: ${cleanUsername}`);
                 }
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 
                     username: cleanUsername,
@@ -1381,6 +1467,110 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // OCR endpoint for images: uploads an image and returns extracted text + ingredients
+    if (false && req.url === '/api/ocr-ticket' && req.method === 'POST') {
+        // parse multipart manually (small payloads)
+        const boundaryHeader = req.headers['content-type'] || '';
+        const m = boundaryHeader.match(/boundary=(.*)$/);
+        if (!m) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Missing boundary in content-type' }));
+            return;
+        }
+
+        let body = Buffer.alloc(0);
+        req.on('data', chunk => body = Buffer.concat([body, chunk]));
+        req.on('end', async () => {
+            try {
+                const boundary = m[1];
+                const parts = parseMultipart(body, boundary);
+                const imagePart = parts.find(p => p.name === 'image' || p.name === 'photo');
+                if (!imagePart) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'No image provided' }));
+                    return;
+                }
+
+                const mime = (imagePart.filename && imagePart.filename.toLowerCase().endsWith('.png')) ? 'image/png' : 'image/jpeg';
+                const b64 = imagePart.data.toString('base64');
+
+                const prompt = `Eres un asistente con capacidad de visión. Extrae EL TEXTO DEL TICKET tal y como aparece en la imagen y DEVUÉLVELO EN ESPAÑOL si el ticket está en español. NO TRADUZCAS NI NORMALICES los nombres de los productos: devuelve las palabras exactamente como aparecen en la imagen (mayúsculas/minúsculas).\n\n` +
+                    `Devuelve SOLO un objeto JSON con las claves:\n` +
+                    `  \"text\": el texto completo del ticket con saltos de línea (\\n)\n` +
+                    `  \"items\": un array con las líneas que parecen artículos del ticket, exactamente como aparecen (sin traducir)\n` +
+                    `Ejemplo de salida:\n{\"text\":\"LÍNEA1\\nLÍNEA2\", \"items\": [\"1 BANANA 1,108 kg 1,72\", \"1 PAN 1,80\"] }\n` +
+                    `Si no puedes extraer artículos con seguridad, incluye igualmente el texto tal cual y una lista vacía en \"items\". No añadas explicaciones ni traducciones.\n\nIMAGEN:\n` + `data:${mime};base64,${b64}`;
+
+                try {
+                    console.log('📷 OCR: sending image to OpenAI (size bytes):', imagePart.data.length);
+                    const ocrResult = await callOpenAIFetch(prompt);
+                    // Log raw result summary for debugging
+                    try {
+                        console.log('📷 OCR: OpenAI result keys:', Object.keys(ocrResult || {}));
+                    } catch (e) {}
+                    const ticketText = (ocrResult && ocrResult.text) ? ocrResult.text : (typeof ocrResult === 'string' ? ocrResult : '');
+                    console.log('📷 OCR: extracted text length:', ticketText ? ticketText.length : 0);
+                    if (ticketText) console.log('📷 OCR sample:', ticketText.substring(0, 400).replace(/\n/g, '\\n'));
+                    const ingredients = extractIngredientsFromTicket(ticketText);
+                    console.log('📷 OCR: ingredients parsed count:', ingredients.length);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ text: ticketText, ingredients }));
+                } catch (err) {
+                    console.error('OCR call error', err && (err.stack || err));
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'OCR failed: ' + (err && err.message ? err.message : String(err)) }));
+                }
+            } catch (e) {
+                console.error('Error parsing multipart for OCR:', e);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid multipart data' }));
+            }
+        });
+        return;
+    }
+
+    // Map plain ticket text to products (POST JSON { ticketText: '...' })
+    if (false && req.url === '/api/find-products-from-text' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { ticketText } = JSON.parse(body || '{}');
+                const ingredients = extractIngredientsFromTicket(ticketText || '');
+                const matches = [];
+                for (const ingredient of ingredients) {
+                    const ingredientNormalized = ingredient.name.toLowerCase().trim();
+                    // Try associations
+                    if (associationsCache[ingredientNormalized]) {
+                        const assoc = associationsCache[ingredientNormalized];
+                        const producto = productosCache.productos.find(p => p.id === assoc.productId);
+                        if (producto) {
+                            matches.push({ ingredient: ingredient.name, product: producto });
+                            continue;
+                        }
+                    }
+
+                    // Fallback: substring match
+                    for (const p of productosCache.productos) {
+                        if (!p || !p.nombre) continue;
+                        if (p.nombre.toLowerCase().includes(ingredientNormalized)) {
+                            matches.push({ ingredient: ingredient.name, product: p });
+                            break;
+                        }
+                    }
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ingredients, matches }));
+            } catch (e) {
+                console.error('find-products-from-text error', e);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Error processing text' }));
+            }
+        });
+        return;
+    }
+
     // Generate from already parsed text endpoint
     if (req.url === '/generar-desde-texto' && req.method === 'POST') {
         handleGenerateFromText(req, res);
@@ -1442,9 +1632,141 @@ const server = http.createServer((req, res) => {
                 is_pack: p.es_pack
             }
         }));
-        
+
+        // Compress JSON response (gzip) to reduce payload over network
+        try {
+            const out = JSON.stringify({ results });
+            const gz = zlib.gzipSync(out);
+            res.writeHead(200, {
+                'Content-Type': 'application/json',
+                'Content-Encoding': 'gzip',
+                'Content-Length': gz.length,
+                'Access-Control-Allow-Origin': '*'
+            });
+            res.end(gz);
+        } catch (e) {
+            // Fallback to plain JSON
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ results }));
+        }
+        return;
+    }
+
+    // API local - Historial de precios por producto
+    if (req.url.startsWith('/api/price-history') && req.method === 'GET') {
+        const urlParams = new URLSearchParams(req.url.split('?')[1] || '');
+        const productId = urlParams.get('productId');
+        const days = parseInt(urlParams.get('days') || '0', 10);
+        if (!productId) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'productId required' }));
+            return;
+        }
+        const arr = priceHistory[String(productId)] || [];
+        if (days > 0) {
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - days);
+            const cutoffStr = cutoff.toISOString().split('T')[0];
+            const filtered = arr.filter(x => x.date >= cutoffStr);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(filtered));
+            return;
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ results }));
+        res.end(JSON.stringify(arr));
+        return;
+    }
+
+    // Create a shareable recipe link (expires in 30 days)
+    if (req.url === '/api/share-recipe' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const payload = JSON.parse(body || '{}');
+                const recipe = payload.recipe;
+                if (!recipe) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'recipe required' }));
+                    return;
+                }
+                const token = crypto.randomBytes(16).toString('hex');
+                const createdAt = new Date().toISOString();
+                const expiresAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)).toISOString();
+                sharedRecipes[token] = { recipe, createdAt, expiresAt };
+                saveSharedRecipes();
+                const url = `/shared/recipe?token=${token}`;
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ token, url, expiresAt }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid body' }));
+            }
+        });
+        return;
+    }
+
+    // Send an existing share token to another user (adds to recipient inbox)
+    if (req.url === '/api/share-to-user' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { token, toUser, fromUser } = JSON.parse(body || '{}');
+                if (!token || !toUser) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'token and toUser required' }));
+                    return;
+                }
+                if (!sharedRecipes[token]) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'token not found' }));
+                    return;
+                }
+                const cleanTo = String(toUser).trim().toLowerCase();
+                if (!usersCache[cleanTo]) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'recipient user not found' }));
+                    return;
+                }
+                usersCache[cleanTo].sharedReceived = usersCache[cleanTo].sharedReceived || [];
+                usersCache[cleanTo].sharedReceived.push({ token, from: fromUser || null, createdAt: new Date().toISOString() });
+                saveUsers();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid body' }));
+            }
+        });
+        return;
+    }
+
+    // Serve shared recipe by token
+    if (req.url.startsWith('/shared/recipe') && req.method === 'GET') {
+        const urlParams = new URLSearchParams(req.url.split('?')[1] || '');
+        const token = urlParams.get('token');
+        if (!token) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'token required' }));
+            return;
+        }
+        const entry = sharedRecipes[token];
+        if (!entry) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'not found' }));
+            return;
+        }
+        if (new Date() > new Date(entry.expiresAt)) {
+            // expired - delete and save
+            delete sharedRecipes[token];
+            saveSharedRecipes();
+            res.writeHead(410, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'expired' }));
+            return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ recipe: entry.recipe, createdAt: entry.createdAt, expiresAt: entry.expiresAt }));
         return;
     }
 
@@ -1976,7 +2298,19 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta (sin texto a
             "difficulty": "Fácil/Media/Difícil",
             "servings": "número de personas (ej: 4 personas)",
             "ingredients": ["ingrediente 1 con cantidad", "ingrediente 2 con cantidad", "ingrediente 3", "ingrediente 4"],
-            "steps": ["Paso 1 de la preparación", "Paso 2 de la preparación"]
+                "steps": ["Paso 1 de la preparación", "Paso 2 de la preparación"],
+                "nutrition": { "kcal_per_100g": 0, "fat_g": 0.0, "carbs_g": 0.0, "protein_g": 0.0 }
+    try {
+        if (fs.existsSync(PRICE_HISTORY_FILE)) {
+            priceHistory = JSON.parse(fs.readFileSync(PRICE_HISTORY_FILE, 'utf8')) || {};
+            console.log('📈 Cargado price history, productos con historial:', Object.keys(priceHistory).length);
+        } else {
+            priceHistory = {};
+        }
+    } catch (err) {
+        console.error('Error cargando price_history.json:', err);
+        priceHistory = {};
+    }
         }
     ]
 }`;
@@ -2060,7 +2394,8 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta (sin texto a
             "difficulty": "Fácil/Media/Difícil",
             "servings": "número de personas (ej: 4 personas)",
             "ingredients": ["ingrediente 1 con cantidad", "ingrediente 2 con cantidad"],
-            "steps": ["Paso 1 de la preparación", "Paso 2 de la preparación"]
+            "steps": ["Paso 1 de la preparación", "Paso 2 de la preparación"],
+            "nutrition": { "kcal_per_100g": 0, "fat_g": 0.0, "carbs_g": 0.0, "protein_g": 0.0 }
         }
     ]
 }
@@ -2199,4 +2534,20 @@ server.listen(PORT, HOST, () => {
     if (!productosCache) {
         console.log('\n⚠️  No hay datos locales. Ejecuta: node sync-productos.js\n');
     }
+    // Record initial price snapshot at startup and schedule daily snapshots
+    try {
+        recordPriceSnapshot();
+    } catch (e) {
+        console.error('Error recording initial price snapshot:', e);
+    }
+
+    // Schedule daily snapshots every 24 hours
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    setInterval(() => {
+        try {
+            recordPriceSnapshot();
+        } catch (e) {
+            console.error('Error recording scheduled price snapshot:', e);
+        }
+    }, ONE_DAY_MS);
 });

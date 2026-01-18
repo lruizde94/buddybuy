@@ -374,6 +374,64 @@ body {
     color: var(--secondary-color);
 }
 
+/* ===== Cook Modal Styles ===== */
+.cook-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 99999 !important; /* ensure cook modal is on very top */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.cook-container {
+    width: 100%;
+    max-width: 1000px;
+    height: auto;
+    max-height: 86vh;
+    margin: 0 auto;
+    display: flex;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+}
+.cook-sidebar {
+    width: 320px;
+    background: #fafafa;
+    border-right: 1px solid var(--border-color);
+    padding: 18px;
+    overflow-y: auto;
+}
+.cook-sidebar-header {
+    display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:12px;
+}
+.cook-steps-list .cook-step-item {
+    padding: 10px 8px; border-radius:8px; cursor:pointer; margin-bottom:8px; font-size:0.95rem;
+}
+.cook-steps-list .cook-step-item.active {
+    background: var(--primary-light); border:1px solid var(--primary-color); color:var(--primary-color);
+}
+.cook-main {
+    flex:1; padding:36px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+}
+.cook-step-number { font-size:14px; color:var(--text-muted); margin-bottom:6px; }
+.cook-step-text { font-size:28px; font-weight:600; text-align:center; line-height:1.2; color:var(--secondary-color); }
+.cook-timer-area { margin-top:18px; }
+.cook-timer {
+    display:flex; align-items:center; gap:12px; font-size:18px; font-weight:600; color:var(--text-color);
+}
+.cook-timer button { padding:8px 12px; border-radius:8px; border:none; background:var(--primary-gradient); color:var(--white); cursor:pointer; font-weight:600; }
+.btn-stop { padding:10px 14px; background: #ff5252; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; }
+.btn-stop:hover { filter: brightness(0.95); transform: translateY(-2px); }
+.cook-controls { display:flex; gap:8px; justify-content:center; margin-top:16px; }
+
+@media (max-width: 800px) {
+    .cook-container { flex-direction: column; }
+    .cook-sidebar { display:none; }
+    .cook-step-text { font-size:22px; }
+    .cook-controls { left: 12px; right: 12px; bottom: 14px; justify-content:space-between; position:static; }
+}
+
 .products-info {
     display: flex;
     align-items: center;
@@ -896,6 +954,7 @@ body {
         z-index: 200;
         transition: var(--transition);
         box-shadow: var(--shadow-lg);
+        padding-bottom: 160px; /* leave space for floating controls on mobile */
     }
     
     .sidebar.active {
@@ -1310,6 +1369,33 @@ body {
     transform: none;
 }
 
+/* Primary small button (used by recipe cards for 'Empezar a cocinar') */
+.btn-primary {
+    padding: 8px 12px;
+    background: var(--primary-gradient);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: var(--transition);
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,166,80,0.18); }
+
+/* Secondary button style consistent with site */
+.btn-secondary {
+    padding: 10px 14px;
+    background: var(--white);
+    color: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-weight: 600;
+    transition: var(--transition);
+}
+.btn-secondary:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+
 /* Toggle Button */
 .ingredients-toggle {
     position: fixed;
@@ -1485,6 +1571,8 @@ body {
     gap: 15px;
     margin-bottom: 15px;
 }
+.recipe-actions { margin-left:auto; display:flex; gap:8px; align-items:center; }
+.btn-share-recipe { background: none; border: 1px solid var(--border-color); padding:6px 8px; border-radius:8px; cursor:pointer; }
 
 .recipe-number {
     width: 40px;
@@ -2035,33 +2123,38 @@ body {
 
 .ticket-options {
     margin-bottom: 20px;
+    text-align: center;
 }
 
 .ticket-options h4 {
     text-align: center;
     color: var(--secondary-color);
-    margin-bottom: 15px;
-    font-size: 1rem;
 }
 
-.option-buttons {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+/* Center the option buttons in the ticket modal */
+.ticket-options .option-buttons {
+    display: flex;
+    justify-content: center;
+    align-items: center;
     gap: 15px;
+    flex-wrap: wrap;
+    margin-top: 12px;
 }
 
-.option-buttons-3 {
-    grid-template-columns: 1fr 1fr 1fr;
+.ticket-options .btn-option {
+    width: 260px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 18px 14px;
 }
 
 @media (max-width: 600px) {
-    .option-buttons-3 {
-        grid-template-columns: 1fr;
-    }
+    .ticket-options .btn-option { width: 100%; }
+    .ticket-options .option-buttons { flex-direction: column; gap: 12px; }
 }
-
-.btn-option {
-
 /* Centered floating container to hold buttons as a group */
 #floatingControls {
     position: fixed;
@@ -2675,6 +2768,27 @@ body {
 .btn-share-list:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+}
+
+/* Frecuentes button - match look and typography with other action buttons */
+.btn-frecuentes {
+    flex: 1;
+    padding: 14px 20px;
+    border: 2px solid var(--border-color);
+    background: var(--background);
+    color: var(--text-color);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+}
+
+.btn-frecuentes:hover {
+    background: var(--primary-light);
+    color: var(--primary-color);
+    transform: translateY(-1px);
 }
 
 /* Share Link Container */
@@ -3448,6 +3562,18 @@ body {
 
 .profile-header p {
     color: var(--text-muted);
+}
+
+/* Profile user id shown under the display name */
+.profile-display-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--secondary-color);
+}
+.profile-user-id {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-top: 6px;
 }
 
 .btn-profile {
