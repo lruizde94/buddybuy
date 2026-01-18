@@ -1937,11 +1937,100 @@ async function showShoppingListModal() {
     // Load user's list from server if logged in
     if (currentUser) {
         await loadUserShoppingList();
+        // Ensure user's tickets are loaded so we can show 'Frecuentes'
+        await loadUserTickets();
     }
     
     renderShoppingList();
     renderSharedLists();
     setupShoppingSearch();
+
+    // Show/hide Frecuentes button if user has > 2 tickets
+    const frecuentesBtn = document.getElementById('frecuentesBtn');
+    if (frecuentesBtn) {
+        if (currentUser && Array.isArray(userTickets) && userTickets.length > 2) {
+            frecuentesBtn.style.display = 'inline-block';
+        } else {
+            frecuentesBtn.style.display = 'none';
+        }
+    }
+}
+
+// Compute frequent products across user's tickets (appear in >=2 tickets)
+function computeFrequentProducts() {
+    if (!Array.isArray(userTickets) || userTickets.length === 0) return [];
+
+    const freq = {};
+    // For each ticket, get unique product ids in that ticket to avoid double-counting within same ticket
+    for (const t of userTickets) {
+        const seen = new Set();
+        if (!Array.isArray(t.products)) continue;
+        for (const p of t.products) {
+            const id = String(p.id || p.productId || p.id_product || p.name);
+            if (seen.has(id)) continue;
+            seen.add(id);
+            freq[id] = freq[id] ? freq[id] + 1 : 1;
+        }
+    }
+
+    // Select ids that appear in at least 2 different tickets
+    const frequentIds = Object.entries(freq).filter(([id, count]) => count >= 2).map(([id]) => id);
+
+    // Build product objects using ticket data (prefer latest occurrence)
+    const byId = {};
+    for (const t of userTickets) {
+        if (!Array.isArray(t.products)) continue;
+        for (const p of t.products) {
+            const id = String(p.id || p.productId || p.id_product || p.name);
+            if (!byId[id]) byId[id] = p;
+        }
+    }
+
+    return frequentIds.map(id => byId[id]).filter(Boolean);
+}
+
+// Add frequent products to shopping list (only if user logged and has >2 tickets)
+async function applyFrecuentes() {
+    if (!currentUser) { showLoginModal(); return; }
+
+    if (!Array.isArray(userTickets) || userTickets.length <= 2) {
+        showNotification('Necesitas al menos 3 tickets subidos para usar Frecuentes');
+        return;
+    }
+
+    const frequentProducts = computeFrequentProducts();
+    if (frequentProducts.length === 0) {
+        showNotification('No se encontraron productos recurrentes en tus tickets');
+        return;
+    }
+
+    let added = 0;
+    for (const p of frequentProducts) {
+        const pid = String(p.id || p.productId || p.name);
+        if (shoppingList.some(item => String(item.id) === pid)) continue;
+
+        const price = parseFloat(p.price || p.unit_price || p.price_instructions?.unit_price || 0) || 0;
+        shoppingList.push({
+            id: pid,
+            name: p.name || p.display_name || p.product_name || pid,
+            quantity: 1,
+            checked: false,
+            thumbnail: p.thumbnail || '',
+            price: price,
+            isWeight: Boolean(p.isWeight || (p.price_instructions && p.price_instructions.selling_method === 2)),
+            packaging: p.packaging || ''
+        });
+        added++;
+    }
+
+    if (added > 0) {
+        saveShoppingList();
+        renderShoppingList();
+        updateShoppingListCount();
+        showNotification(`✅ ${added} productos frecuentes añadidos a la lista`);
+    } else {
+        showNotification('No se añadieron productos (ya estaban en la lista)');
+    }
 }
 
 function closeShoppingListModal() {
