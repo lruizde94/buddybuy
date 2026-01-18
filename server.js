@@ -25,23 +25,72 @@ function loadEnvFile() {
 loadEnvFile();
 
 // PDF parsing library
-let PDFParse;
+let PDFParseModule = null;
+let PDFParseFn = null;
 try {
     const pdfModule = require('pdf-parse');
-    PDFParse = pdfModule.PDFParse;
-    console.log('📄 PDF parser cargado correctamente');
+    PDFParseModule = pdfModule;
+
+    // Try to detect the exported API shape
+    if (typeof pdfModule === 'function') {
+        PDFParseFn = pdfModule;
+    } else if (pdfModule && typeof pdfModule.default === 'function') {
+        PDFParseFn = pdfModule.default;
+    } else if (pdfModule && typeof pdfModule.PDFParse === 'function') {
+        // older/alternate exports
+        PDFParseFn = function (buffer) {
+            // pdfModule.PDFParse used as constructor in some builds
+            const parser = new pdfModule.PDFParse({ data: buffer });
+            return parser.getText ? parser.getText() : Promise.resolve(parser);
+        };
+    } else if (pdfModule && typeof pdfModule.PDFParser === 'function') {
+        PDFParseFn = function (buffer) {
+            const parser = new pdfModule.PDFParser({ data: buffer });
+            return parser.getText ? parser.getText() : Promise.resolve(parser);
+        };
+    }
+
+    if (PDFParseFn) {
+        console.log('📄 PDF parser cargado correctamente (forma detectada)');
+    } else {
+        console.log('⚠️ pdf-parse cargado pero no se reconoció su API. Algunas funciones de PDF pueden fallar.');
+    }
 } catch (e) {
     console.log('⚠️ pdf-parse no instalado. Ejecuta: npm install pdf-parse');
 }
 
 // Helper function to parse PDF
 async function parsePDF(buffer) {
-    const parser = new PDFParse({
-        data: buffer,
-        verbosity: 0
-    });
-    const result = await parser.getText();
-    return result.text;
+    if (!PDFParseFn) {
+        throw new Error('pdf-parse module not available or has unexpected export shape');
+    }
+
+    // Try calling detected function and normalize result
+    try {
+        const result = await PDFParseFn(buffer);
+        if (!result) return '';
+        if (typeof result === 'string') return result;
+        if (result.text) return result.text;
+        // Some parser variants return an object with other properties
+        // Try to stringify useful text fields
+        return (result.text || result.numpages || JSON.stringify(result)).toString();
+    } catch (e) {
+        // If the detected wrapper failed, try alternative approaches
+        try {
+            // If module exposes PDFParse as constructor
+            const pdfModule = PDFParseModule;
+            if (pdfModule && typeof pdfModule.PDFParse === 'function') {
+                const parser = new pdfModule.PDFParse({ data: buffer });
+                if (parser.getText) {
+                    const r = await parser.getText();
+                    return r.text || r;
+                }
+            }
+        } catch (e2) {
+            // fall through
+        }
+        throw e;
+    }
 }
 
 const PORT = process.env.PORT || 3000;
@@ -1200,9 +1249,9 @@ const server = http.createServer((req, res) => {
                     ticketInfo: ticketInfo
                 }));
             } catch (e) {
-                console.error('Error finding products:', e);
+                console.error('Error finding products:', e && e.stack ? e.stack : e);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Error procesando ticket' }));
+                res.end(JSON.stringify({ error: 'Error finding products: ' + (e && e.message ? e.message : String(e)) }));
             }
         });
         return;
@@ -1630,6 +1679,9 @@ function extractIngredientsFromTicket(ticketText) {
         // Líneas con formato de encabezado
         /^descripci[oó]n.*importe/i,
         /^p\.?\s*unit/i
+        ,/--\s*\d+\s*of\s*\d+\s*--/i
+        ,/verificad[oó]/i
+        ,/^kg\s*\/\s*kg/i
     ];
     
     // Palabras clave que indican que NO es un producto
@@ -1684,13 +1736,19 @@ function extractIngredientsFromTicket(ticketText) {
             .trim();
         
         // Validar que parece un producto válido
+        // Excluir nombres que son solo unidades o ruido (ej: "kg /kg", "-- 1 of 1 --", "Verificado...")
+        const lowerName = productName.toLowerCase();
+        const isUnitSlash = /^([a-z]{1,3}\s*\/\s*[a-z]{1,3})$/i.test(productName);
+        const isNoiseToken = lowerName.includes('verificado') || lowerName.includes('of 1') || productName.includes('--');
+
         if (productName.length >= 4 && 
             productName.length <= 50 && 
             !ingredients.some(i => i.name === productName) &&
             /[a-záéíóúñ]/i.test(productName) && // Debe contener letras
             !/^\d+$/.test(productName) && // No puede ser solo números
             !productName.includes('****') && // No datos de tarjeta
-            productName.split(' ').length <= 6) { // Máximo 6 palabras
+            productName.split(' ').length <= 6 &&
+            !isUnitSlash && !isNoiseToken) { // Filtrar unidades y ruido
             ingredients.push({
                 name: productName,
                 price: price
