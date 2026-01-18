@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Environment variables (contienen credenciales sensibles)
+.env
+.env.local
+.env.production
+
+# Data files (contienen datos de usuarios)
+data/users.json
+data/sessions.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Build outputs
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.temp
