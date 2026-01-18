@@ -143,6 +143,16 @@
             <span>❤️</span>
             <span class="user-favorites-count" id="userFavoritesCount" style="display: none;">0</span>
         </button>
+        <!-- Ticket Upload Button -->
+        <button class="ticket-toggle" id="ticketToggle" onclick="showTicketModal()" style="display: none;">
+            <span>🧾</span>
+        </button>
+
+        <!-- Shopping List Button -->
+        <button class="shopping-list-toggle" id="shoppingListToggle" onclick="showShoppingListModal()" style="display: none;">
+            <span>📋</span>
+            <span class="shopping-list-count" id="shoppingListCount" style="display: none;">0</span>
+        </button>
     </div>
 
     <!-- Login Modal -->
@@ -179,16 +189,7 @@
         </div>
     </div>
 
-    <!-- Ticket Upload Button -->
-    <button class="ticket-toggle" id="ticketToggle" onclick="showTicketModal()">
-        <span>🧾</span>
-    </button>
-
-    <!-- Shopping List Button -->
-    <button class="shopping-list-toggle" id="shoppingListToggle" onclick="showShoppingListModal()">
-        <span>📋</span>
-        <span class="shopping-list-count" id="shoppingListCount" style="display: none;">0</span>
-    </button>
+    <!-- (Floating buttons live inside #floatingControls) -->
 
     <!-- Shopping List Modal -->
     <div class="modal" id="shoppingListModal">
