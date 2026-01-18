@@ -2747,25 +2747,9 @@ function updateUserUI() {
         setDisp(userInfo, 'flex');
         setDisp(loginPrompt, 'none');
         
-        // Show OAuth user info with avatar if available
-        if (oauthUserInfo && oauthUserInfo.picture) {
-            currentUserName.innerHTML = `
-                <span class="oauth-user-info">
-                    <img src="${oauthUserInfo.picture}" alt="avatar" class="oauth-user-avatar">
-                    <span>${oauthUserInfo.name || oauthUserInfo.email}</span>
-                </span>
-            `;
-        } else {
-            // Show initials (first 2 letters of name) when no profile picture
-            const displayName = (oauthUserInfo && oauthUserInfo.name) ? oauthUserInfo.name : currentUser;
-            const initials = displayName.substring(0, 2).toUpperCase();
-            currentUserName.innerHTML = `
-                <span class="oauth-user-info">
-                    <span class="user-initials-avatar">${initials}</span>
-                    <span>${displayName}</span>
-                </span>
-            `;
-        }
+        // Show just the display name (no avatar or initials)
+        const displayName = (oauthUserInfo && oauthUserInfo.name) ? oauthUserInfo.name : currentUser;
+        currentUserName.textContent = displayName;
         
         setDisp(userFavoritesToggle, 'flex');
         updateUserFavoritesCount();
