@@ -132,6 +132,9 @@ let categoriasCache = null;
 let usersCache = {};
 let sessionsCache = {};
 let associationsCache = {}; // { "normalized_ticket_item": { productId: "id", originalName: "name" } }
+// Search index and query cache for faster lookups
+let searchIndex = null; // { tokenMap: Map(token -> Set(productIndex)), products: Array(products), normNames: Array }
+const queryCache = new Map(); // simple LRU-like cache
 
 // Cargar datos locales al iniciar
 function loadLocalData() {
@@ -157,9 +160,114 @@ function loadLocalData() {
             associationsCache = JSON.parse(fs.readFileSync(ASSOCIATIONS_FILE, 'utf-8'));
             console.log(`🔗 Cargadas ${Object.keys(associationsCache).length} asociaciones de productos`);
         }
+        // Build search index after loading products
+        buildSearchIndex();
     } catch (error) {
         console.log('⚠️ No se encontraron datos locales. Ejecuta: node sync-productos.js');
     }
+}
+
+// Build a simple inverted index for products to speed up search
+function buildSearchIndex() {
+    if (!productosCache || !Array.isArray(productosCache.productos)) return;
+    searchIndex = {
+        tokenMap: new Map(),
+        products: productosCache.productos,
+        normNames: []
+    };
+
+    const addToken = (token, idx) => {
+        if (!token || token.length < 2) return; // skip tiny tokens
+        let s = searchIndex.tokenMap.get(token);
+        if (!s) {
+            s = new Set();
+            searchIndex.tokenMap.set(token, s);
+        }
+        s.add(idx);
+    };
+
+    for (let i = 0; i < searchIndex.products.length; i++) {
+        const p = searchIndex.products[i];
+        const name = normalizeSearch(p.nombre || '');
+        searchIndex.normNames[i] = name;
+        // tokenization: words and also contiguous substrings of words (prefixes)
+        const words = name.split(/[^a-z0-9]+/).filter(Boolean);
+        for (const w of words) {
+            addToken(w, i);
+            // add prefixes (for prefix search), min length 2
+            for (let L = 2; L <= Math.min(8, w.length); L++) {
+                addToken(w.substring(0, L), i);
+            }
+        }
+    }
+
+    console.log(`🔎 Search index creado: ${searchIndex.products.length} productos, ${searchIndex.tokenMap.size} tokens`);
+}
+
+function cachedQueryGet(key) {
+    if (queryCache.has(key)) {
+        const v = queryCache.get(key);
+        // refresh position to make it more-recent
+        queryCache.delete(key);
+        queryCache.set(key, v);
+        return v;
+    }
+    return null;
+}
+
+function cachedQuerySet(key, value) {
+    queryCache.set(key, value);
+    // limit size to 300 entries
+    if (queryCache.size > 300) {
+        const firstKey = queryCache.keys().next().value;
+        queryCache.delete(firstKey);
+    }
+}
+
+// Search using the inverted index: token lookup + scoring
+function searchProductsIndexed(qnorm, limit = 20) {
+    if (!searchIndex) return [];
+    const cached = cachedQueryGet(qnorm);
+    if (cached) return cached;
+
+    const tokens = qnorm.split(/[^a-z0-9]+/).filter(Boolean);
+    if (tokens.length === 0) {
+        cachedQuerySet(qnorm, []);
+        return [];
+    }
+
+    // For each token get candidate sets and union them, then score by matches
+    const candidateScores = new Map(); // idx -> score
+    for (const t of tokens) {
+        // try exact token then fallback to shorter prefix
+        let set = searchIndex.tokenMap.get(t);
+        if (!set) {
+            // try prefixes length down to 2
+            for (let L = Math.min(t.length, 8); L >= 2 && !set; L--) {
+                set = searchIndex.tokenMap.get(t.substring(0, L));
+            }
+        }
+        if (!set) continue;
+        for (const idx of set) {
+            const prev = candidateScores.get(idx) || 0;
+            candidateScores.set(idx, prev + 1);
+        }
+    }
+
+    // Convert to array and sort by score + position of token in name
+    const candidates = Array.from(candidateScores.entries()).map(([idx, score]) => {
+        const p = searchIndex.products[idx];
+        const name = searchIndex.normNames[idx];
+        // boost if startsWith
+        let boost = 0;
+        if (name.startsWith(qnorm)) boost += 3;
+        return { p, score, boost };
+    });
+
+    candidates.sort((a, b) => (b.score + b.boost) - (a.score + a.boost));
+    const results = candidates.slice(0, limit).map(c => c.p);
+    cachedQuerySet(qnorm, results);
+    return results;
 }
 
 // Guardar sesiones en archivo
@@ -1304,30 +1412,36 @@ const server = http.createServer((req, res) => {
             return;
         }
 
-        const results = productosCache.productos
-            .filter(p => normalizeSearch(p.nombre || '').includes(qnorm))
-            .slice(0, 20)
-            .map(p => ({
-                id: p.id,
-                display_name: p.nombre,
-                packaging: p.packaging,
-                thumbnail: p.imagen,
-                share_url: p.url,
-                categoryL2: p.categoria_L2,
-                categoryL3: p.categoria_L3,
-                price_instructions: {
-                    unit_price: p.precio,
-                    previous_unit_price: p.precio_anterior,
-                    bulk_price: p.precio_bulk,
-                    unit_size: p.unit_size,
-                    size_format: p.size_format,
-                    selling_method: p.selling_method || 1,
-                    iva: p.iva,
-                    is_new: p.es_nuevo,
-                    price_decreased: p.tiene_descuento,
-                    is_pack: p.es_pack
-                }
-            }));
+        // Use indexed search when available for much faster lookups
+        let found = [];
+        if (searchIndex) {
+            const matched = searchProductsIndexed(qnorm, 50);
+            found = matched;
+        } else {
+            found = productosCache.productos.filter(p => normalizeSearch(p.nombre || '').includes(qnorm)).slice(0,50);
+        }
+
+        const results = found.slice(0,20).map(p => ({
+            id: p.id,
+            display_name: p.nombre,
+            packaging: p.packaging,
+            thumbnail: p.imagen,
+            share_url: p.url,
+            categoryL2: p.categoria_L2,
+            categoryL3: p.categoria_L3,
+            price_instructions: {
+                unit_price: p.precio,
+                previous_unit_price: p.precio_anterior,
+                bulk_price: p.precio_bulk,
+                unit_size: p.unit_size,
+                size_format: p.size_format,
+                selling_method: p.selling_method || 1,
+                iva: p.iva,
+                is_new: p.es_nuevo,
+                price_decreased: p.tiene_descuento,
+                is_pack: p.es_pack
+            }
+        }));
         
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ results }));
