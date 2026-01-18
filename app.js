@@ -1780,12 +1780,18 @@ function addTicketProductsToShoppingList() {
     for (const product of products) {
         const existingItem = shoppingList.find(item => item.id === product.id);
         if (!existingItem) {
+            const priceInfo = product.price_instructions || {};
             shoppingList.push({
                 id: product.id,
                 name: product.display_name,
                 quantity: 1,
                 checked: false,
-                thumbnail: product.thumbnail
+                thumbnail: product.thumbnail,
+                price: priceInfo.unit_price || 0,
+                bulkPrice: priceInfo.bulk_price || null,
+                isWeight: priceInfo.selling_method === 2,
+                packaging: product.packaging || '',
+                sizeFormat: priceInfo.size_format || ''
             });
             added++;
         }
@@ -1801,19 +1807,38 @@ function addProductToShoppingList(productId, productName, thumbnail) {
         showLoginModal();
         return;
     }
-
     const existingItem = shoppingList.find(item => String(item.id) === String(productId));
     
     if (existingItem) {
         existingItem.quantity++;
         showNotification(`${productName} (x${existingItem.quantity})`);
     } else {
+        // Try to enrich with product details from currentProducts
+        const prod = currentProducts.find(p => String(p.id) === String(productId));
+        let price = 0;
+        let packaging = '';
+        let isWeight = false;
+        let sizeFormat = '';
+
+        if (prod) {
+            const priceInfo = prod.price_instructions || {};
+            price = priceInfo.unit_price || 0;
+            packaging = prod.packaging || '';
+            isWeight = priceInfo.selling_method === 2;
+            sizeFormat = priceInfo.size_format || '';
+        }
+
         shoppingList.push({
             id: productId,
             name: productName,
             quantity: 1,
             checked: false,
-            thumbnail: thumbnail
+            thumbnail: thumbnail,
+            price: price,
+            bulkPrice: null,
+            isWeight: isWeight,
+            packaging: packaging,
+            sizeFormat: sizeFormat
         });
         showNotification(`📋 ${productName} añadido a la lista`);
     }
