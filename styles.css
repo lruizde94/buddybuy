@@ -1111,11 +1111,12 @@ body {
 
 /* Collapsed (compact) ingredients state */
 .ingredients-panel.collapsed {
-    width: 80px;
-    height: 80px;
+    width: auto;
+    min-width: 64px;
+    height: 64px;
     border-radius: 50%;
-    padding: 8px;
-    display: flex;
+    padding: 8px 12px;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     transform: none;
@@ -1141,9 +1142,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: -6px;
+    gap: 6px;
     position: relative;
     height: 28px;
+    padding: 0 4px;
 }
 
 .ingredients-collapsed-icons img {
@@ -1153,7 +1155,30 @@ body {
     border-radius: 6px;
     border: 2px solid var(--white);
     box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-    margin-left: -8px;
+    margin-left: 0;
+    flex-shrink: 0;
+}
+
+.thumbs-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ingredients-extra {
+    margin-left: 8px;
+    background: var(--primary-color);
+    color: white;
+    min-width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
 }
 
 .ingredients-panel .ingredients-count {
@@ -2172,6 +2197,83 @@ body {
 }
 
 .user-favorites-toggle:hover { transform: scale(1.05); }
+
+/* ===== Responsive: Mobile & Small Screens ===== */
+@media (max-width: 768px) {
+    /* Layout adjustments */
+    .layout {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* Hide the left sidebar on small screens (mobile navigation via menu toggle)
+       and make products section take full width */
+    .sidebar {
+        display: none;
+    }
+
+    .products-section {
+        padding-bottom: 160px; /* leave space for floating controls */
+    }
+
+    /* Ingredients panel becomes a bottom sheet by default */
+    .ingredients-panel {
+        width: calc(100% - 32px);
+        left: 16px;
+        right: 16px;
+        bottom: 110px;
+        transform: translateX(0);
+        border-radius: 12px;
+        max-height: 50vh;
+    }
+
+    /* Collapsed circular icon state on mobile (small badge) */
+    .ingredients-panel.collapsed {
+        width: 64px;
+        height: 64px;
+        bottom: 90px;
+        left: auto;
+        right: 16px;
+        border-radius: 50%;
+        padding: 8px;
+    }
+
+    .ingredients-panel.collapsed .ingredients-header {
+        align-items: center;
+    }
+
+    /* Floating buttons: smaller and closer together, centered */
+    .ingredients-toggle, .favorites-toggle, .user-favorites-toggle {
+        width: 52px;
+        height: 52px;
+        font-size: 1.15rem;
+    }
+
+    .ingredients-toggle { transform: translateX(-64px); }
+    .favorites-toggle { transform: translateX(0); }
+    .user-favorites-toggle { transform: translateX(64px); }
+
+    .ingredients-collapsed-icons img {
+        width: 22px;
+        height: 22px;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Extra adjustments for very small screens */
+    .ingredients-panel {
+        bottom: 100px;
+        max-height: 55vh;
+    }
+
+    .products-grid article.product-card {
+        width: 100%;
+        margin-bottom: 12px;
+    }
+
+    .search-container { max-width: 100%; }
+}
     
     .ticket-toggle {
         width: 50px;

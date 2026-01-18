@@ -670,10 +670,13 @@ function updateIngredientsUI() {
         
             // Collapsed icons (for compact view) - show up to 5 thumbnails
             if (ingredientsCollapsedIcons) {
-                const icons = selectedIngredients.slice(0,5).map(ing => `
+                const maxThumbs = 3;
+                const thumbs = selectedIngredients.slice(0, maxThumbs).map(ing => `
                     <img src="${ing.thumbnail || 'https://via.placeholder.com/40'}" title="${ing.name}" alt="${ing.name}" onerror="this.src='https://via.placeholder.com/40'"/>
                 `).join('');
-                ingredientsCollapsedIcons.innerHTML = icons;
+                const remaining = Math.max(0, selectedIngredients.length - maxThumbs);
+                const extra = remaining > 0 ? `<div class="ingredients-extra">+${remaining}</div>` : '';
+                ingredientsCollapsedIcons.innerHTML = `<div class="thumbs-row">${thumbs}</div>${extra}`;
             }
     }
 
