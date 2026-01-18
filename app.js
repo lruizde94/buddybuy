@@ -2602,9 +2602,11 @@ function updateUserUI() {
     const favoritesToggle = document.getElementById('favoritesToggle');
     const ingredientsToggleEl = document.getElementById('ingredientsToggle');
     
+    const setDisp = (el, val) => { if (!el) return; el.style.setProperty('display', val, 'important'); };
+
     if (currentUser) {
-        userInfo.style.display = 'flex';
-        loginPrompt.style.display = 'none';
+        setDisp(userInfo, 'flex');
+        setDisp(loginPrompt, 'none');
         
         // Show OAuth user info with avatar if available
         if (oauthUserInfo && oauthUserInfo.picture) {
@@ -2626,51 +2628,51 @@ function updateUserUI() {
             `;
         }
         
-        userFavoritesToggle.style.display = 'flex';
+        setDisp(userFavoritesToggle, 'flex');
         updateUserFavoritesCount();
         // Enable global actions for logged users
         if (ticketToggle) {
-            ticketToggle.style.display = 'flex';
+            setDisp(ticketToggle, 'flex');
             ticketToggle.onclick = () => showTicketModal();
         }
         if (ingredientsToggleEl) {
-            ingredientsToggleEl.style.display = 'flex';
+            setDisp(ingredientsToggleEl, 'flex');
         }
         if (shoppingListToggle) {
-            shoppingListToggle.style.display = 'flex';
+            setDisp(shoppingListToggle, 'flex');
             shoppingListToggle.onclick = () => showShoppingListModal();
         }
         if (favoritesToggle) {
-            favoritesToggle.style.display = 'flex';
+            setDisp(favoritesToggle, 'flex');
             favoritesToggle.onclick = () => showFavoritesModal();
         }
         if (generateMenu) {
             generateMenu.removeAttribute('disabled');
-            generateMenu.style.display = '';
+            generateMenu.style.setProperty('display', 'inline-block', 'important');
         }
     } else {
-        userInfo.style.display = 'none';
-        loginPrompt.style.display = 'flex';
-        userFavoritesToggle.style.display = 'none';
+        setDisp(userInfo, 'none');
+        setDisp(loginPrompt, 'flex');
+        setDisp(userFavoritesToggle, 'none');
         // Hide/disable actions for anonymous users
         if (ticketToggle) {
-            ticketToggle.style.display = 'none';
+            setDisp(ticketToggle, 'none');
             ticketToggle.onclick = null;
         }
         if (ingredientsToggleEl) {
-            ingredientsToggleEl.style.display = 'none';
+            setDisp(ingredientsToggleEl, 'none');
         }
         if (shoppingListToggle) {
-            shoppingListToggle.style.display = 'none';
+            setDisp(shoppingListToggle, 'none');
             shoppingListToggle.onclick = null;
         }
         if (favoritesToggle) {
-            favoritesToggle.style.display = 'none';
+            setDisp(favoritesToggle, 'none');
             favoritesToggle.onclick = null;
         }
         if (generateMenu) {
             generateMenu.setAttribute('disabled', 'true');
-            generateMenu.style.display = 'none';
+            generateMenu.style.setProperty('display', 'none', 'important');
         }
     }
 }
