@@ -4678,3 +4678,29 @@ body {
     .shopping-list-toggle { transform: translateX(-128px); display: flex; z-index: 101; }
     .ingredients-toggle, .favorites-toggle, .user-favorites-toggle, .ticket-toggle, .shopping-list-toggle { width: 52px; height: 52px; font-size: 1.1rem; }
 }
+
+/* Override legacy fixed-placement rules and force buttons to live inside #floatingControls */
+#floatingControls .ingredients-toggle,
+#floatingControls .favorites-toggle,
+#floatingControls .user-favorites-toggle,
+#floatingControls .ticket-toggle,
+#floatingControls .shopping-list-toggle {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    z-index: 140 !important;
+}
+
+/* Ensure ticket and shopping list are visible inside the centered container */
+#floatingControls .ticket-toggle,
+#floatingControls .shopping-list-toggle {
+    display: inline-flex !important;
+    background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+}
+
+/* Small spacing tweak so they don't touch the footer */
+#floatingControls { bottom: 56px; }
