@@ -3324,9 +3324,20 @@ async function showUserFavoritesCategory() {
         const data = await response.json();
         
         loadingProducts.classList.add('hidden');
-        
+
         if (data.favorites && data.favorites.length > 0) {
-            currentProducts = data.favorites;
+            // Deduplicate favorites by canonical product ID (string)
+            const favs = data.favorites || [];
+            const seen = new Set();
+            const unique = [];
+            for (const f of favs) {
+                const pid = String(f.id || f);
+                if (!seen.has(pid)) {
+                    seen.add(pid);
+                    unique.push(f);
+                }
+            }
+            currentProducts = unique;
             renderProducts(currentProducts);
         } else {
             productsGrid.innerHTML = `
