@@ -11,6 +11,8 @@ let selectedIngredients = [];
 let favoriteMenus = JSON.parse(localStorage.getItem('favoriteMenus') || '[]');
 let shoppingList = JSON.parse(localStorage.getItem('shoppingList') || '[]');
 let shoppingSearchTimeout = null;
+// Cache to avoid repeated category lookups for shopping list items
+let productCategoryCache = {};
 
 // User state
 let currentUser = localStorage.getItem('currentUser') || null;
@@ -2464,7 +2466,7 @@ function updateShoppingItemQuantity(productId, delta) {
     }
 }
 
-function renderShoppingList() {
+async function renderShoppingList() {
     const container = document.getElementById('shoppingListContent');
     const totalEl = document.getElementById('shoppingListTotal');
     const noteEl = document.getElementById('shoppingListNote');
@@ -2501,21 +2503,75 @@ function renderShoppingList() {
     
     let total = 0;
     let hasWeightProducts = false;
-    
     // Filter out checked items for total (they're "bought")
     const activeItems = shoppingList.filter(item => !item.checked);
     
-    container.innerHTML = shoppingList.map(item => {
+    // Resolve categories for items (use cache, currentProducts, or fallback to API search)
+    const categoryPromises = shoppingList.map(async (item) => {
+        // Prefer explicit category stored on item
+        if (item.category) return item.category;
+
+        // Try cache by id or name
+        if (productCategoryCache[item.id]) return productCategoryCache[item.id];
+        if (productCategoryCache[item.name]) return productCategoryCache[item.name];
+
+        // Try to find in currently loaded products
+        const prod = currentProducts.find(p => String(p.id) === String(item.id));
+        if (prod) {
+            const cat = prod.categoryL2 || prod.categoryL3 || prod.categoria_L2 || prod.categoria_L3 || 'Sin categoría';
+            productCategoryCache[item.id] = cat;
+            return cat;
+        }
+
+        // Fallback: query server search by name (take top result's category)
+        try {
+            const resp = await fetch(`/api/search?query=${encodeURIComponent(item.name)}`);
+            if (resp && resp.ok) {
+                const data = await resp.json();
+                const top = (data.results && data.results[0]) || null;
+                if (top) {
+                    const cat = top.categoryL2 || top.categoryL3 || 'Sin categoría';
+                    productCategoryCache[item.id] = cat;
+                    productCategoryCache[item.name] = cat;
+                    return cat;
+                }
+            }
+        } catch (e) {
+            console.error('Error buscando categoría del producto:', e);
+        }
+
+        productCategoryCache[item.id] = 'Sin categoría';
+        return 'Sin categoría';
+    });
+
+    const resolvedCategories = await Promise.all(categoryPromises);
+
+    // Group items by category preserving original order within each category
+    const groups = {};
+    shoppingList.forEach((item, idx) => {
+        const cat = resolvedCategories[idx] || 'Sin categoría';
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(item);
+        if (item.isWeight) hasWeightProducts = true;
         if (!item.checked) {
             const itemPrice = parseFloat(item.price) || 0;
             const itemQty = parseInt(item.quantity) || 1;
             const itemTotal = itemPrice * itemQty;
             total += itemTotal;
         }
-        if (item.isWeight) hasWeightProducts = true;
-        
+    });
+
+    // Sort category names alphabetically (items of same category will be contiguous)
+    const sortedCats = Object.keys(groups).sort((a,b) => a.localeCompare(b, 'es'));
+
+    // Flatten items preserving the per-category order
+    const flatItems = [];
+    sortedCats.forEach(cat => {
+        groups[cat].forEach(item => flatItems.push(item));
+    });
+
+    container.innerHTML = flatItems.map(item => {
         const itemId = String(item.id).replace(/'/g, "\\'");
-        
         if (isShoppingMode) {
             return `
                 <div class="shopping-item shopping-mode ${item.checked ? 'checked' : ''}" 
