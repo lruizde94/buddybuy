@@ -2097,6 +2097,51 @@ function addTicketProductsToShoppingList() {
     showNotification(`${added} productos añadidos a la lista de compra`);
 }
 
+// Añadir todos los productos favoritos del usuario a la lista de la compra
+async function addAllFavoritesToShoppingList() {
+    if (!currentUser) { showLoginModal(); return; }
+
+    try {
+        const resp = await fetch('/api/user/favorites', {
+            headers: { 'X-User': currentUser }
+        });
+        if (!resp.ok) throw new Error('Error fetching favorites');
+        const data = await resp.json();
+        const favorites = data.favorites || [];
+
+        let added = 0;
+        for (const p of favorites) {
+            const pid = String(p.id || p.productId || p.id_product || p)
+            if (shoppingList.some(item => String(item.id) === pid)) continue;
+            shoppingList.push({
+                id: pid,
+                name: p.display_name || p.nombre || p.name || 'Producto',
+                quantity: 1,
+                checked: false,
+                thumbnail: p.thumbnail || p.imagen || '',
+                price: (p.price_instructions && p.price_instructions.unit_price) || p.unit_price || 0,
+                bulkPrice: (p.price_instructions && p.price_instructions.bulk_price) || null,
+                isWeight: (p.price_instructions && p.price_instructions.selling_method === 2) || false,
+                packaging: p.packaging || '',
+                sizeFormat: (p.price_instructions && p.price_instructions.size_format) || ''
+            });
+            added++;
+        }
+
+        if (added > 0) {
+            saveShoppingList();
+            renderShoppingList();
+            updateShoppingListCount();
+            showNotification(`✅ ${added} favoritos añadidos a la lista`);
+        } else {
+            showNotification('No hay favoritos nuevos para añadir');
+        }
+    } catch (e) {
+        console.error('Error añadiendo favoritos a la lista:', e);
+        showNotification('Error al añadir favoritos');
+    }
+}
+
 // Añadir un producto individual a la lista de compra
 function addProductToShoppingList(productId, productName, thumbnail) {
     if (!currentUser) {
