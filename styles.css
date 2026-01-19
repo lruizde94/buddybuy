@@ -134,6 +134,21 @@ body {
     letter-spacing: -0.5px;
 }
 
+.logo .brand {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+}
+
+.logo .tagline {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+    font-weight: 600;
+    text-transform: none;
+    opacity: 0.95;
+}
+
 .search-container {
     flex: 1;
     max-width: 480px;
