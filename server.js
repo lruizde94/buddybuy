@@ -127,8 +127,40 @@ function parseBoolEnv(val, defaultVal = false) {
     if (s === '') return defaultVal;
     return ['1', 'true', 'yes', 'y', 'on'].includes(s);
 }
-const ALLOW_TEST_USERS = parseBoolEnv(process.env.ALLOW_TEST_USERS, true);
-console.log(`🔧 ALLOW_TEST_USERS raw="${process.env.ALLOW_TEST_USERS}" parsed=${ALLOW_TEST_USERS}`);
+// Runtime configuration persisted to data/config.json (allows toggling without env restarts)
+const CONFIG_FILE = path.join(__dirname, 'data', 'config.json');
+let runtimeConfig = null;
+
+function loadRuntimeConfig() {
+    try {
+        const dataDir = path.join(__dirname, 'data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        if (fs.existsSync(CONFIG_FILE)) {
+            runtimeConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8')) || {};
+        } else {
+            runtimeConfig = { allowTestUsers: parseBoolEnv(process.env.ALLOW_TEST_USERS, true) };
+            fs.writeFileSync(CONFIG_FILE, JSON.stringify(runtimeConfig, null, 2), 'utf-8');
+        }
+    } catch (e) {
+        console.error('Error loading runtime config:', e);
+        runtimeConfig = { allowTestUsers: parseBoolEnv(process.env.ALLOW_TEST_USERS, true) };
+    }
+    console.log(`🔧 Runtime config loaded: allowTestUsers=${!!runtimeConfig.allowTestUsers}`);
+}
+
+function saveRuntimeConfig() {
+    try {
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(runtimeConfig, null, 2), 'utf-8');
+    } catch (e) {
+        console.error('Error saving runtime config:', e);
+    }
+}
+
+function getAllowTestUsers() {
+    return !!(runtimeConfig && runtimeConfig.allowTestUsers);
+}
+
+loadRuntimeConfig();
 
 // Archivos de datos locales
 const DATA_DIR = path.join(__dirname, 'data');
@@ -653,15 +685,69 @@ const server = http.createServer((req, res) => {
     // Config endpoint (expose feature toggles to frontend)
     if (req.url === '/api/config' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ allowTestUsers: !!ALLOW_TEST_USERS }));
+        res.end(JSON.stringify({ allowTestUsers: getAllowTestUsers() }));
         return;
+    }
+
+    // Admin endpoint to inspect/update runtime config
+    if (pathname === '/api/admin/config') {
+        // Protection: require ADMIN_TOKEN header if configured, otherwise only allow localhost
+        const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+        const remote = req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : '';
+        const isLocal = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remote);
+
+        if (req.method === 'GET') {
+            // Return current runtime config
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ config: runtimeConfig || { allowTestUsers: getAllowTestUsers() } }));
+            return;
+        }
+
+        if (req.method === 'POST') {
+            // Authenticate
+            if (ADMIN_TOKEN) {
+                const token = req.headers['x-admin-token'] || '';
+                if (token !== ADMIN_TOKEN) {
+                    res.writeHead(403, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Invalid admin token' }));
+                    return;
+                }
+            } else if (!isLocal) {
+                res.writeHead(403, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Admin config endpoint is restricted to localhost' }));
+                return;
+            }
+
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => {
+                try {
+                    const payload = JSON.parse(body || '{}');
+                    if (typeof payload.allowTestUsers !== 'undefined') {
+                        runtimeConfig = runtimeConfig || {};
+                        runtimeConfig.allowTestUsers = !!payload.allowTestUsers;
+                        saveRuntimeConfig();
+                        console.log(`🔧 Admin updated allowTestUsers=${runtimeConfig.allowTestUsers}`);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: true, config: runtimeConfig }));
+                        return;
+                    }
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'No valid fields provided' }));
+                } catch (e) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Invalid JSON' }));
+                }
+            });
+            return;
+        }
     }
     
     // Login/Register user (GET users, POST to login/create)
     if (req.url === '/api/users' && req.method === 'GET') {
         // If test users disabled, only return OAuth users (start with 'google_')
         let users = Object.keys(usersCache);
-        if (!ALLOW_TEST_USERS) {
+        if (!getAllowTestUsers()) {
             users = users.filter(u => u.startsWith('google_'));
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -684,7 +770,7 @@ const server = http.createServer((req, res) => {
                 const cleanUsername = username.trim().toLowerCase();
 
                 // If test users are disabled, block local/test user creation (non-OAuth)
-                if (!ALLOW_TEST_USERS && !cleanUsername.startsWith('google_')) {
+                if (!getAllowTestUsers() && !cleanUsername.startsWith('google_')) {
                     res.writeHead(403, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Test users are disabled on this installation' }));
                     return;
