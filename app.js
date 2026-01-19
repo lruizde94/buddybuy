@@ -1875,31 +1875,43 @@ async function saveProductAssociations(products) {
         
         // Collect associations from the confirmation UI
         const associations = [];
-        const items = document.querySelectorAll('.ticket-confirm-item:not(.skipped)');
-        
+        const items = document.querySelectorAll('.ticket-confirm-item');
+
         items.forEach(item => {
             const ingredient = item.dataset.ingredient;
             const productId = item.querySelector('.selected-product-id')?.value;
             const productCategory = item.querySelector('.selected-product-category')?.value;
-            
-            if (ingredient && productId && productCategory && !nonFoodCategories.includes(productCategory)) {
-                associations.push({
-                    ticketItem: ingredient,
-                    productId: productId
-                });
+            const isSkipped = item.classList.contains('skipped');
+
+            // If this ingredient had a previous association from the server and the user changed it,
+            // send an explicit deletion (productId: null)
+            const original = pendingTicketData?.originalProducts?.find(op => String(op.matchedIngredient || op.name) === String(ingredient));
+            const origWasAssoc = original && original.fromAssociation;
+
+            if (origWasAssoc && (isSkipped || !productId || String(productId) !== String(original.id))) {
+                associations.push({ ticketItem: ingredient, productId: null });
+            }
+
+            if (!isSkipped && ingredient && productId && productCategory && !nonFoodCategories.includes(productCategory)) {
+                associations.push({ ticketItem: ingredient, productId: productId });
             }
         });
-        
+
         if (associations.length === 0) return;
-        
-        // Send to server
+
+        // Send to server (include user header for auditing)
         const response = await fetch('/api/save-product-associations', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-User': currentUser || '' },
             body: JSON.stringify({ associations })
         });
-        
-        const result = await response.json();
+
+        if (!response.ok) {
+            console.error('Error saving associations, server responded:', response.status);
+            return;
+        }
+
+        const result = await response.json().catch(() => ({}));
         if (result.saved > 0) {
             console.log(`💾 Guardadas ${result.saved} asociaciones para matching futuro`);
         }
@@ -3456,7 +3468,7 @@ async function deleteTicket(hash) {
     if (!confirm('¿Eliminar este ticket de tu historial?')) return;
     
     try {
-        await fetch('/api/user/tickets', {
+        const response = await fetch('/api/user/tickets', {
             method: 'DELETE',
             headers: { 
                 'Content-Type': 'application/json',
@@ -3464,9 +3476,27 @@ async function deleteTicket(hash) {
             },
             body: JSON.stringify({ ticketHash: hash })
         });
-        
+
+        if (!response.ok) throw new Error('Error deleting ticket');
+        const data = await response.json().catch(() => ({}));
+
         showNotification('Ticket eliminado');
-        loadUserTickets();
+        // If server returned updated tickets/frequentIds, use them; otherwise reload
+        if (data.tickets) {
+            userTickets = data.tickets;
+            renderTicketsList(userTickets);
+        } else {
+            loadUserTickets();
+        }
+
+        // If frequentIds returned, update UI or notify
+        if (Array.isArray(data.frequentIds)) {
+            // Optionally, re-render shopping modal frecuents availability
+            const frecuentesBtn = document.getElementById('frecuentesBtn');
+            if (frecuentesBtn) {
+                frecuentesBtn.style.display = (currentUser && userTickets && userTickets.length > 2) ? 'inline-block' : 'none';
+            }
+        }
     } catch (e) {
         console.error('Error deleting ticket:', e);
     }
