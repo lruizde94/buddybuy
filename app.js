@@ -1990,7 +1990,8 @@ async function toggleTicketProductFavorite(productId, button) {
         const data = await response.json();
         
         if (data.success) {
-            userFavoriteProducts = data.favorites || [];
+            // normalize favorites to canonical string IDs
+            userFavoriteProducts = (data.favorites || []).map(f => String(f.id || f));
             
             if (isFavorite) {
                 button.classList.remove('added');
@@ -2042,7 +2043,6 @@ async function addAllTicketProductsToFavorites() {
                 
                 const data = await response.json();
                 if (data.success) {
-                    userFavoriteProducts = data.favorites || [];
                     added++;
                 }
             } catch (error) {
@@ -2051,6 +2051,17 @@ async function addAllTicketProductsToFavorites() {
         }
     }
     
+    // Refresh canonical favorites from server to ensure uniqueness
+    try {
+        const resp = await fetch('/api/user/favorites', { headers: { 'X-User': currentUser } });
+        if (resp.ok) {
+            const d = await resp.json();
+            userFavoriteProducts = Array.from(new Set((d.favorites || []).map(f => String(f.id || f))));
+        }
+    } catch (e) {
+        console.error('Error refreshing favorites after batch add:', e);
+    }
+
     // Actualizar UI
     document.querySelectorAll('.ticket-product-card .btn-add-favorite').forEach(btn => {
         btn.classList.add('added');
@@ -3226,7 +3237,7 @@ async function loadUserSession() {
             const data = await response.json();
             
             if (data.favorites) {
-                userFavoriteProducts = data.favorites.map(p => p.id);
+                userFavoriteProducts = Array.from(new Set((data.favorites || []).map(p => String(p.id || p))));
             }
             
             updateUserUI();
@@ -3263,7 +3274,7 @@ async function toggleProductFavorite(productId, event) {
         const data = await response.json();
         
         if (data.success) {
-            userFavoriteProducts = data.favorites;
+            userFavoriteProducts = Array.from(new Set((data.favorites || []).map(f => String(f.id || f))));
             updateUserFavoritesCount();
             
             // Update button state
@@ -3283,10 +3294,10 @@ async function toggleProductFavorite(productId, event) {
 
 function updateUserFavoritesCount() {
     const countEl = document.getElementById('userFavoritesCount');
-    const count = userFavoriteProducts.length;
-    
-    if (count > 0) {
-        countEl.textContent = count;
+    const uniqueCount = new Set((userFavoriteProducts || []).map(id => String(id))).size;
+
+    if (uniqueCount > 0) {
+        countEl.textContent = uniqueCount;
         countEl.style.display = 'flex';
     } else {
         countEl.style.display = 'none';
@@ -3296,7 +3307,7 @@ function updateUserFavoritesCount() {
     try {
         const addFavBtn = document.getElementById('addFavoritesBtn');
         if (addFavBtn) {
-            if (currentUser && count > 0) {
+            if (currentUser && uniqueCount > 0) {
                 addFavBtn.style.display = 'inline-block';
             } else {
                 addFavBtn.style.display = 'none';
