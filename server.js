@@ -905,17 +905,22 @@ const server = http.createServer((req, res) => {
                 if (!usersCache[username].favoriteProducts) {
                     usersCache[username].favoriteProducts = [];
                 }
-                
-                const favorites = usersCache[username].favoriteProducts;
-                
-                if (action === 'add' && !favorites.includes(productId)) {
-                    favorites.push(productId);
-                    saveUsers();
+
+                // Normalize incoming productId to string for consistent comparisons/storage
+                const pidStr = productId == null ? null : String(productId);
+                let favorites = usersCache[username].favoriteProducts.map(id => String(id));
+
+                if (action === 'add') {
+                    if (pidStr && !favorites.includes(pidStr)) {
+                        favorites.push(pidStr);
+                        usersCache[username].favoriteProducts = favorites;
+                        saveUsers();
+                    }
                 } else if (action === 'remove') {
-                    usersCache[username].favoriteProducts = favorites.filter(id => id !== productId);
+                    usersCache[username].favoriteProducts = favorites.filter(id => String(id) !== pidStr);
                     saveUsers();
                 }
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 
                     success: true, 

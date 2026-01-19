@@ -1927,30 +1927,37 @@ function addAllConfirmedToFavorites() {
     }
     
     const products = window.currentTicketProducts || [];
-    products.forEach(async (product) => {
-        if (!userFavoriteProducts.map(String).includes(String(product.id))) {
+    if (products.length === 0) return;
+
+    for (const product of products) {
+        const pid = String(product.id);
+        if (!userFavoriteProducts.map(String).includes(pid)) {
             try {
                 await fetch('/api/user/favorites', {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'X-User': currentUser
-                    },
-                    body: JSON.stringify({
-                        productId: String(product.id),
-                        action: 'add'
-                    })
+                    headers: { 'Content-Type': 'application/json', 'X-User': currentUser },
+                    body: JSON.stringify({ productId: pid, action: 'add' })
                 });
-                userFavoriteProducts.push(String(product.id));
             } catch (e) {
                 console.error('Error adding favorite:', e);
             }
         }
-    });
-    
+    }
+
+    // Refresh canonical favorites from server to avoid duplicates and type issues
+    try {
+        const resp = await fetch('/api/user/favorites', { headers: { 'X-User': currentUser } });
+        if (resp.ok) {
+            const data = await resp.json();
+            userFavoriteProducts = (data.favorites || []).map(f => String(f.id || f));
+        }
+    } catch (e) {
+        console.error('Error refreshing favorites after batch add:', e);
+    }
+
     updateUserFavoritesCount();
     showNotification(`✅ ${products.length} productos añadidos a favoritos`);
-    
+
     // Update buttons
     document.querySelectorAll('.btn-add-favorite').forEach(btn => {
         btn.classList.add('added');
@@ -1988,9 +1995,10 @@ async function toggleTicketProductFavorite(productId, button) {
         });
         
         const data = await response.json();
-        
+
         if (data.success) {
-            userFavoriteProducts = data.favorites || [];
+            // Normalize favorites to string IDs
+            userFavoriteProducts = (data.favorites || []).map(f => String(f));
             
             if (isFavorite) {
                 button.classList.remove('added');
@@ -2023,32 +2031,36 @@ async function addAllTicketProductsToFavorites() {
     
     let added = 0;
     const currentFavoritesStr = userFavoriteProducts.map(String);
-    
+
     for (const product of products) {
         const productIdStr = String(product.id);
         if (!currentFavoritesStr.includes(productIdStr)) {
             try {
                 const response = await fetch('/api/user/favorites', {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'X-User': currentUser
-                    },
-                    body: JSON.stringify({
-                        productId: productIdStr,
-                        action: 'add'
-                    })
+                    headers: { 'Content-Type': 'application/json', 'X-User': currentUser },
+                    body: JSON.stringify({ productId: productIdStr, action: 'add' })
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
-                    userFavoriteProducts = data.favorites || [];
                     added++;
                 }
             } catch (error) {
                 console.error('Error adding favorite:', error);
             }
         }
+    }
+
+    // Refresh favorites to canonicalize and prevent duplicates
+    try {
+        const resp = await fetch('/api/user/favorites', { headers: { 'X-User': currentUser } });
+        if (resp.ok) {
+            const data = await resp.json();
+            userFavoriteProducts = (data.favorites || []).map(f => String(f.id || f));
+        }
+    } catch (e) {
+        console.error('Error refreshing favorites after batch add:', e);
     }
     
     // Actualizar UI
@@ -3106,7 +3118,7 @@ async function doLogin(username) {
         
         currentUser = data.username;
         localStorage.setItem('currentUser', currentUser);
-        userFavoriteProducts = data.user.favoriteProducts || [];
+        userFavoriteProducts = (data.user && data.user.favoriteProducts ? data.user.favoriteProducts : []).map(f => String(f));
         
         updateUserUI();
         closeLoginModal();
@@ -3226,7 +3238,8 @@ async function loadUserSession() {
             const data = await response.json();
             
             if (data.favorites) {
-                userFavoriteProducts = data.favorites.map(p => p.id);
+                // favorites endpoint returns product objects; store canonical string IDs
+                userFavoriteProducts = data.favorites.map(p => String(p.id || p));
             }
             
             updateUserUI();
