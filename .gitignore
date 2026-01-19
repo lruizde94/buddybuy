@@ -10,6 +10,9 @@ node_modules/
 data/users.json
 data/sessions.json
 
+# Product associations (runtime mapping that should not be committed)
+data/product_associations.json
+
 # Logs
 logs/
 *.log
