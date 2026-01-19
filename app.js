@@ -3291,6 +3291,20 @@ function updateUserFavoritesCount() {
     } else {
         countEl.style.display = 'none';
     }
+
+    // Show or hide "Añadir favoritos" button in shopping list
+    try {
+        const addFavBtn = document.getElementById('addFavoritesBtn');
+        if (addFavBtn) {
+            if (currentUser && count > 0) {
+                addFavBtn.style.display = 'inline-block';
+            } else {
+                addFavBtn.style.display = 'none';
+            }
+        }
+    } catch (e) {
+        console.error('Error updating addFavoritesBtn visibility:', e);
+    }
 }
 
 async function showUserFavoritesCategory() {
