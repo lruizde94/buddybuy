@@ -1388,48 +1388,14 @@ const server = http.createServer((req, res) => {
                                 fromAssociation: true // marcar que viene de asociación guardada
                             };
 
-                            // Si tenemos precio en el ticket y difiere significativamente, buscar sugerencias alternas
+                            // Si tenemos precio en el ticket y difiere significativamente, NO sobreescribir
+                            // la asociación: marcamos el desajuste pero mantenemos la asociación como prioritaria.
                             const ticketPrice = ingredient.price;
                             if (ticketPrice && producto.precio) {
                                 const priceDiffRatio = Math.abs(ticketPrice - producto.precio) / Math.max(ticketPrice, producto.precio);
                                 if (priceDiffRatio > 0.10) { // umbral 10%
-                                    // Buscar candidatos similares por nombre y con precio más cercano
-                                    const searchTerms = ingredient.name.toLowerCase().split(/\s+/).filter(t => t.length >= 4 && !/^\d+$/.test(t));
-                                    const candidates = productosCache.productos
-                                        .filter(p => !nonFoodCategories.includes(p.categoria_L1) && p.id !== producto.id);
-
-                                    const scored = candidates.map(p => {
-                                        const nombreLower = p.nombre.toLowerCase();
-                                        let nameScore = 0;
-                                        for (const term of searchTerms) {
-                                            if (nombreLower.includes(term)) {
-                                                nameScore += term.length >= 6 ? 3 : 1;
-                                            }
-                                        }
-                                        // Score por proximidad de precio (mayor si más cercano)
-                                        let priceScore = 0;
-                                        if (ticketPrice && p.precio) {
-                                            const pr = Math.abs(ticketPrice - p.precio) / Math.max(ticketPrice, p.precio);
-                                            priceScore = 1 - pr; // entre 0 y 1 (mayor = mejor)
-                                        }
-                                        return { p, score: nameScore + priceScore };
-                                    })
-                                    .filter(s => s.score > 0)
-                                    .sort((a, b) => b.score - a.score)
-                                    .slice(0, 3);
-
-                                    if (scored.length > 0) {
-                                        primary.suggestions = scored.map(s => ({
-                                            id: s.p.id,
-                                            display_name: s.p.nombre,
-                                            packaging: s.p.packaging,
-                                            thumbnail: s.p.imagen,
-                                            categoryL2: s.p.categoria_L2,
-                                            categoryL3: s.p.categoria_L3,
-                                            unit_price: s.p.precio
-                                        }));
-                                        primary.priceMismatch = true;
-                                    }
+                                    primary.priceMismatch = true;
+                                    console.log(`⚠️ Precio no coincide para asociación (ticket: ${ticketPrice} vs producto: ${producto.precio}), manteniendo asociación`);
                                 }
                             }
 
