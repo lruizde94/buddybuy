@@ -2240,7 +2240,7 @@ async function showShoppingListModal() {
     }
 }
 
-// Compute frequent products across user's tickets (appear in >=2 tickets)
+// Compute frequent products across user's tickets (appear in >=3 tickets)
 function computeFrequentProducts() {
     if (!Array.isArray(userTickets) || userTickets.length === 0) return [];
 
@@ -2257,8 +2257,8 @@ function computeFrequentProducts() {
         }
     }
 
-    // Select ids that appear in at least 2 different tickets
-    const frequentIds = Object.entries(freq).filter(([id, count]) => count >= 2).map(([id]) => id);
+    // Select ids that appear in at least 3 different tickets
+    const frequentIds = Object.entries(freq).filter(([id, count]) => count >= 3).map(([id]) => id);
 
     // Build product objects using ticket data (prefer latest occurrence)
     const byId = {};
