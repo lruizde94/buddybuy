@@ -2224,8 +2224,6 @@ body {
 @media (max-width: 480px) {
     #floatingControls { gap: 10px; }
 }
-/* Option button used in ticket/options UI */
-.btn-option {
     display: flex;
     flex-direction: column;
     align-items: center;
