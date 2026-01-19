@@ -149,6 +149,16 @@ async function fetchCategories() {
         return data.results || [];
     } catch (error) {
         console.error('Error fetching categories:', error);
+        // Fallback: try loading local `data/categorias.json` (served statically)
+        try {
+            const resp2 = await fetch('/data/categorias.json');
+            if (resp2.ok) {
+                const local = await resp2.json();
+                return local || [];
+            }
+        } catch (e) {
+            console.error('Fallback loading local categorias.json failed:', e);
+        }
         return [];
     }
 }
