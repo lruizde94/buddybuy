@@ -56,5 +56,34 @@
     },
     "createdAt": "2026-01-18T19:24:26.595Z",
     "expiresAt": "2026-02-17T19:24:26.595Z"
+  },
+  "ab0eefb8e360f21dfb80aff4f4e3a863": {
+    "recipe": {
+      "name": "Puchero Trío de Carnes",
+      "time": "90 min",
+      "difficulty": "Media",
+      "servings": "6 personas",
+      "ingredients": [
+        "Arreglo para puchero vacuno 500g",
+        "Arreglo para puchero cerdo 300g",
+        "Arreglo para puchero pollo 300g",
+        "Nata ligera para cocinar Hacendado 200ml",
+        "Verduras al gusto (patatas, zanahorias, nabos) 500g"
+      ],
+      "steps": [
+        "En una olla grande, hervir agua y agregar todas las carnes.",
+        "Añadir las verduras y cocinar a fuego lento durante 1 hora.",
+        "Retirar las carnes, desmenuzarlas y añadir de nuevo a la olla.",
+        "Incorporar la nata ligera y cocinar por 10 minutos más."
+      ],
+      "nutrition": {
+        "kcal_per_100g": 150,
+        "fat_g": 8,
+        "carbs_g": 10,
+        "protein_g": 12
+      }
+    },
+    "createdAt": "2026-01-18T20:01:24.152Z",
+    "expiresAt": "2026-02-17T20:01:24.152Z"
   }
 }
