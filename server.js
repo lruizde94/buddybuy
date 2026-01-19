@@ -1156,9 +1156,24 @@ const server = http.createServer((req, res) => {
                     usersCache[username].tickets = usersCache[username].tickets.filter(t => t.hash !== ticketHash);
                     saveUsers();
                 }
-                
+
+                // Recompute frequent products for response (appear in >=3 tickets)
+                const tickets = usersCache[username].tickets || [];
+                const freq = {};
+                for (const t of tickets) {
+                    const seen = new Set();
+                    if (!Array.isArray(t.products)) continue;
+                    for (const p of t.products) {
+                        const id = String(p.id || p.productId || p.id_product || p.name);
+                        if (seen.has(id)) continue;
+                        seen.add(id);
+                        freq[id] = freq[id] ? freq[id] + 1 : 1;
+                    }
+                }
+                const frequentIds = Object.entries(freq).filter(([id, count]) => count >= 3).map(([id]) => id);
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true }));
+                res.end(JSON.stringify({ success: true, tickets, frequentIds }));
             } catch (e) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Error procesando solicitud' }));
@@ -1169,36 +1184,57 @@ const server = http.createServer((req, res) => {
     
     // Save product associations for future automatic matching
     if (req.url === '/api/save-product-associations' && req.method === 'POST') {
+        // Limit request body size and validate payload
+        let size = 0;
         let body = '';
-        req.on('data', chunk => body += chunk);
+        req.on('data', chunk => {
+            size += chunk.length;
+            if (size > 200000) return req.destroy();
+            body += chunk;
+        });
         req.on('end', () => {
             try {
-                const { associations } = JSON.parse(body);
-                
-                // associations should be array of { ticketItem: "name", productId: "id" }
+                const parsed = JSON.parse(body || '{}');
+                const associations = Array.isArray(parsed.associations) ? parsed.associations : [];
+
+                // associations should be array of { ticketItem: "name", productId: "id" | null }
                 let savedCount = 0;
                 for (const assoc of associations) {
-                    const normalizedKey = assoc.ticketItem.toLowerCase().trim();
-                    const producto = productosCache.productos.find(p => p.id === assoc.productId);
+                    if (!assoc || !assoc.ticketItem) continue;
+                    const normalizedKey = String(assoc.ticketItem).toLowerCase().trim();
+                    const productId = assoc.productId;
+
+                    if (productId == null) {
+                        // explicit deletion
+                        if (associationsCache[normalizedKey]) {
+                            delete associationsCache[normalizedKey];
+                            savedCount++;
+                        }
+                        continue;
+                    }
+
+                    // validate product exists
+                    const producto = productosCache.productos.find(p => String(p.id) === String(productId));
                     if (producto) {
                         associationsCache[normalizedKey] = {
-                            productId: assoc.productId,
+                            productId: String(productId),
                             originalName: producto.nombre,
-                            savedAt: Date.now()
+                            savedAt: Date.now(),
+                            source: 'user'
                         };
                         savedCount++;
                     }
                 }
-                
+
                 if (savedCount > 0) {
                     saveAssociations();
-                    console.log(`💾 Guardadas ${savedCount} asociaciones de productos`);
+                    console.log(`💾 Guardadas/actualizadas ${savedCount} asociaciones de productos`);
                 }
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ saved: savedCount }));
             } catch (e) {
-                console.error('Error saving associations:', e);
+                console.error('Error saving associations:', e && (e.stack || e));
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Error procesando asociaciones' }));
             }
@@ -1420,6 +1456,7 @@ const server = http.createServer((req, res) => {
                     
                     let bestMatch = null;
                     let bestScore = 0;
+                    let bestNameScore = 0;
                     
                     // Categorías que NO son de comida (productos no alimentarios)
                     const nonFoodCategories = [
@@ -1480,28 +1517,59 @@ const server = http.createServer((req, res) => {
                         if (totalScore >= 3 && totalScore > bestScore) {
                             bestMatch = producto;
                             bestScore = totalScore;
+                            bestNameScore = nameScore;
                         }
                     }
                     
-                    // Si encontramos un buen match, agregarlo
+                    // Si encontramos un buen match, agregarlo según coincidencia de nombre.
                     if (bestMatch) {
-                        foundProducts.push({
-                            id: bestMatch.id,
-                            display_name: bestMatch.nombre,
-                            packaging: bestMatch.packaging,
-                            thumbnail: bestMatch.imagen,
-                            categoryL2: bestMatch.categoria_L2,
-                            categoryL3: bestMatch.categoria_L3,
-                            matchedIngredient: ingredient.name,
-                            unit_price: bestMatch.precio,
-                            matchScore: bestScore,
-                            hasPriceMatch: ticketPrice ? Math.abs(ticketPrice - bestMatch.precio) / Math.max(ticketPrice, bestMatch.precio) < 0.10 : false
-                        });
-                        matchedIngredients.add(ingredient.name);
-                        
-                        // Máximo 2 productos por ingrediente del ticket
-                        if (foundProducts.filter(p => p.matchedIngredient === ingredient.name).length >= 2) {
-                            break;
+                        const hasNameMatch = bestNameScore && bestNameScore > 0;
+                        if (hasNameMatch) {
+                            foundProducts.push({
+                                id: bestMatch.id,
+                                display_name: bestMatch.nombre,
+                                packaging: bestMatch.packaging,
+                                thumbnail: bestMatch.imagen,
+                                categoryL2: bestMatch.categoria_L2,
+                                categoryL3: bestMatch.categoria_L3,
+                                matchedIngredient: ingredient.name,
+                                unit_price: bestMatch.precio,
+                                matchScore: bestScore,
+                                hasPriceMatch: ticketPrice ? Math.abs(ticketPrice - bestMatch.precio) / Math.max(ticketPrice, bestMatch.precio) < 0.10 : false
+                            });
+                            matchedIngredients.add(ingredient.name);
+
+                            // Máximo 2 productos por ingrediente del ticket
+                            if (foundProducts.filter(p => p.matchedIngredient === ingredient.name).length >= 2) {
+                                break;
+                            }
+                        } else {
+                            // No hay coincidencia significativa por nombre: no asociar automáticamente.
+                            // En su lugar, generar sugerencias por proximidad de precio para que el usuario revise.
+                            const suggestions = productosCache.productos
+                                .filter(p => !nonFoodCategories.includes(p.categoria_L1) && p.precio)
+                                .map(p => {
+                                    const pr = ticketPrice && p.precio ? Math.abs(ticketPrice - p.precio) / Math.max(ticketPrice, p.precio) : 1;
+                                    return { p, priceRatio: pr };
+                                })
+                                .sort((a, b) => a.priceRatio - b.priceRatio)
+                                .slice(0, 5)
+                                .map(s => ({
+                                    id: s.p.id,
+                                    display_name: s.p.nombre,
+                                    packaging: s.p.packaging,
+                                    thumbnail: s.p.imagen,
+                                    categoryL2: s.p.categoria_L2,
+                                    categoryL3: s.p.categoria_L3,
+                                    unit_price: s.p.precio,
+                                    priceRatio: s.priceRatio
+                                }));
+
+                            foundProducts.push({
+                                matchedIngredient: ingredient.name,
+                                suggestions,
+                                needsReview: true
+                            });
                         }
                     }
                 }
