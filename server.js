@@ -183,6 +183,21 @@ let sharedRecipes = {}; // { token: { recipe, createdAt, expiresAt } }
 // Search index and query cache for faster lookups
 let searchIndex = null; // { tokenMap: Map(token -> Set(productIndex)), products: Array(products), normNames: Array }
 const queryCache = new Map(); // simple LRU-like cache
+// Simple server-side rate limiter store
+const serverRateLimits = {};
+
+// Helper: authenticate request via session cookie or X-Session header. Returns username or null.
+function getAuthenticatedUsername(req) {
+    // Prefer session cookie
+    const sessionId = getSessionFromCookies(req.headers.cookie) || req.headers['x-session'];
+    const session = validateSession(sessionId);
+    if (session && session.userId) return session.userId;
+
+    // If client provides X-User, require that a valid session exists matching that user
+    const headerUser = req.headers['x-user'];
+    if (headerUser && session && session.userId === headerUser) return headerUser;
+    return null;
+}
 
 // Cargar datos locales al iniciar
 function loadLocalData() {
@@ -501,6 +516,24 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // ----- Basic rate limiter per IP (simple in-memory)
+    try {
+        const clientIp = req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : 'unknown';
+        serverRateLimits[clientIp] = serverRateLimits[clientIp] || { count: 0, windowStart: Date.now() };
+        const rl = serverRateLimits[clientIp];
+        const WINDOW_MS = 60 * 1000; // 1 minute
+        const MAX_REQ = parseInt(process.env.RATE_LIMIT || '120', 10);
+        if (Date.now() - rl.windowStart > WINDOW_MS) {
+            rl.count = 0; rl.windowStart = Date.now();
+        }
+        rl.count++;
+        if (rl.count > MAX_REQ) {
+            res.writeHead(429, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
+            return;
+        }
+    } catch (e) {}
+
     // ===== OAuth 2.0 Endpoints =====
     
     // Iniciar flujo OAuth con Google
@@ -745,6 +778,19 @@ const server = http.createServer((req, res) => {
     
     // Login/Register user (GET users, POST to login/create)
     if (req.url === '/api/users' && req.method === 'GET') {
+        // Restrict listing users to admin only to avoid exposing user list
+        const adminToken = process.env.ADMIN_TOKEN || '';
+        const provided = req.headers['x-admin-token'] || '';
+        const remote = req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : '';
+        const isLocal = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remote);
+        if (!adminToken || provided !== adminToken) {
+            if (!isLocal) {
+                res.writeHead(403, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Forbidden' }));
+                return;
+            }
+        }
+
         // If test users disabled, only return OAuth users (start with 'google_')
         let users = Object.keys(usersCache);
         if (!getAllowTestUsers()) {
@@ -802,7 +848,7 @@ const server = http.createServer((req, res) => {
     
     // Get user favorites
     if (req.url.startsWith('/api/user/favorites') && req.method === 'GET') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
@@ -843,7 +889,7 @@ const server = http.createServer((req, res) => {
     
     // Add/Remove favorite product
     if (req.url === '/api/user/favorites' && req.method === 'POST') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
@@ -887,7 +933,7 @@ const server = http.createServer((req, res) => {
     
     // Get user's shopping list
     if (req.url === '/api/user/shopping-list' && req.method === 'GET') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
@@ -904,7 +950,7 @@ const server = http.createServer((req, res) => {
     
     // Save user's shopping list
     if (req.url === '/api/user/shopping-list' && req.method === 'POST') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
@@ -931,7 +977,7 @@ const server = http.createServer((req, res) => {
     
     // Share shopping list with another user
     if (req.url === '/api/user/share-list' && req.method === 'POST') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
@@ -982,7 +1028,7 @@ const server = http.createServer((req, res) => {
     
     // Merge shared list into user's main list
     if (req.url === '/api/user/merge-shared-list' && req.method === 'POST') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
@@ -1038,7 +1084,7 @@ const server = http.createServer((req, res) => {
     
     // Dismiss shared list without merging
     if (req.url === '/api/user/dismiss-shared-list' && req.method === 'POST') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
@@ -1074,7 +1120,7 @@ const server = http.createServer((req, res) => {
     
     // Get user tickets
     if (req.url === '/api/user/tickets' && req.method === 'GET') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
@@ -1090,7 +1136,7 @@ const server = http.createServer((req, res) => {
     
     // Save ticket to user history
     if (req.url === '/api/user/tickets' && req.method === 'POST') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
@@ -1139,7 +1185,7 @@ const server = http.createServer((req, res) => {
     
     // Delete a ticket from user history
     if (req.url === '/api/user/tickets' && req.method === 'DELETE') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
@@ -1244,7 +1290,7 @@ const server = http.createServer((req, res) => {
     
     // Get user stats (aggregated ticket data)
     if (req.url.startsWith('/api/user/stats') && req.method === 'GET') {
-        const username = req.headers['x-user'];
+        const username = getAuthenticatedUsername(req);
         if (!username || !usersCache[username]) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
