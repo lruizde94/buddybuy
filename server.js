@@ -844,7 +844,12 @@ const server = http.createServer((req, res) => {
                     console.log(`👤 Nuevo usuario creado: ${cleanUsername}`);
                 }
 
-                res.writeHead(200, { 'Content-Type': 'application/json' });
+                // Create a session for this user so requests that rely on session auth work
+                const sessionId = createSession(cleanUsername, { local: true });
+                res.writeHead(200, { 
+                    'Content-Type': 'application/json',
+                    'Set-Cookie': `session_id=${sessionId}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}`
+                });
                 res.end(JSON.stringify({ 
                     username: cleanUsername,
                     user: usersCache[cleanUsername]
