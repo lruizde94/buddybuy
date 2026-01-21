@@ -353,6 +353,7 @@
                 <div class="profile-tabs">
                     <button class="profile-tab active" onclick="switchProfileTab('tickets')" id="tabTickets">🧾 Mis Tickets</button>
                     <button class="profile-tab" onclick="switchProfileTab('stats')" id="tabStats">📊 Estadísticas</button>
+                    <button class="profile-tab" onclick="switchProfileTab('shared')" id="tabShared">📨 Compartidos</button>
                 </div>
                 
                 <!-- Tickets Tab Content -->
@@ -431,6 +432,17 @@
                                     <p class="no-data">No hay datos disponibles</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Shared Received Tab Content -->
+                <div class="profile-tab-content hidden" id="sharedTabContent">
+                    <div id="sharedReceivedContainer">
+                        <div class="empty-tickets">
+                            <span>📭</span>
+                            <p>No tienes listas compartidas</p>
+                            <small>Recibirás aquí las listas que otros usuarios compartan contigo</small>
                         </div>
                     </div>
                 </div>

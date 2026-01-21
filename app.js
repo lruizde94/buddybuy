@@ -2934,21 +2934,26 @@ async function shareToUser() {
     }
     
     try {
-        const response = await fetch('/api/user/share-list', {
+        // Create a share token for the current shopping list, then send token to target user
+        const createResp = await fetch('/api/share-shopping-list', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-User': currentUser
-            },
-            body: JSON.stringify({ targetUser })
+            headers: { 'Content-Type': 'application/json', 'X-User': currentUser },
+            body: JSON.stringify({ list: shoppingList })
         });
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            showNotification(data.error);
+        if (!createResp.ok) throw new Error('Error creando enlace');
+        const created = await createResp.json();
+        const token = created.token;
+
+        const sresp = await fetch('/api/share-to-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, toUser: targetUser, fromUser: currentUser })
+        });
+        if (!sresp.ok) {
+            const err = await sresp.json().catch(()=>({}));
+            showNotification('No se pudo enviar al usuario: ' + (err.error || sresp.statusText));
         } else {
-            showNotification(`✅ Lista enviada a ${targetUser}`);
+            showNotification(`✅ Lista compartida con ${targetUser}`);
             document.getElementById('shareToUserInput').value = '';
             document.getElementById('shareOptions').style.display = 'none';
         }
@@ -3476,11 +3481,147 @@ function switchProfileTab(tab) {
     if (tab === 'tickets') {
         document.getElementById('ticketsTabContent').classList.remove('hidden');
         loadUserTickets();
+    } else if (tab === 'shared') {
+        document.getElementById('sharedTabContent').classList.remove('hidden');
+        loadUserSharedReceived();
     } else {
         document.getElementById('statsTabContent').classList.remove('hidden');
         loadUserStats();
     }
 }
+
+let userReceivedShares = [];
+
+async function loadUserSharedReceived() {
+    try {
+        const resp = await fetch('/api/user/shared-received', { headers: { 'X-User': currentUser } });
+        if (!resp.ok) throw new Error('Error fetching shared received');
+        const data = await resp.json();
+        userReceivedShares = data.received || [];
+        renderUserReceivedShares(userReceivedShares);
+    } catch (e) {
+        console.error('Error loading shared received:', e);
+    }
+}
+
+function renderUserReceivedShares(received) {
+    const container = document.getElementById('sharedReceivedContainer');
+    if (!received || received.length === 0) {
+        container.innerHTML = `
+            <div class="empty-tickets">
+                <span>📭</span>
+                <p>No tienes listas compartidas</p>
+                <small>Recibirás aquí las listas que otros usuarios compartan contigo</small>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = received.map(r => {
+        const date = new Date(r.createdAt).toLocaleString('es-ES');
+        const count = r.preview?.count || 0;
+        const itemsHtml = (r.preview?.items || []).map(it => `
+            <div class="shared-item-row">
+                <div class="shared-item-name">${it.name || it.display_name || it.nombre || it.id}</div>
+                <div class="shared-item-actions">
+                    <button onclick="addSharedItemToMyList('${r.token}', ${JSON.stringify(it).replace(/'/g, "\\'")})">➕ Añadir</button>
+                    <button onclick="removeSharedItem('${r.token}', '${(it.id||it.name||it.display_name)}')">🗑️ Eliminar</button>
+                </div>
+            </div>
+        `).join('');
+
+        return `
+            <div class="shared-received-card">
+                <div class="shared-received-header">
+                    <strong>De: ${r.from || 'Desconocido'}</strong>
+                    <span class="muted">${date} · ${count} productos</span>
+                </div>
+                <div class="shared-received-body">
+                    ${itemsHtml}
+                </div>
+                <div style="margin-top:8px; display:flex; gap:8px;">
+                    <button onclick="openSharedList('${r.token}')">Ver completa</button>
+                    <button onclick="mergeSharedTokenToMyList('${r.token}')">Añadir todo a mi lista</button>
+                    <button onclick="dismissReceivedToken('${r.token}')">Descartar</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function openSharedList(token) {
+    try {
+        const resp = await fetch(`/shared/list?token=${encodeURIComponent(token)}`);
+        if (!resp.ok) {
+            showNotification('No se pudo cargar la lista compartida');
+            return;
+        }
+        const data = await resp.json();
+        // Show a quick modal with items
+        const list = data.list || [];
+        const html = list.map(it => `<div style="display:flex;justify-content:space-between;padding:6px 0;">${it.name||it.display_name||it.id} <button onclick=\"addToShoppingList(${JSON.stringify(it).replace(/"/g,'&quot;')})\">➕</button></div>`).join('');
+        const prev = menuContent.innerHTML;
+        menuContent.innerHTML = `<div style="max-height:60vh;overflow:auto;padding:12px;">${html}</div>`;
+        document.getElementById('menuModal').classList.add('active');
+        setTimeout(() => { menuContent.innerHTML = prev; }, 5000);
+    } catch (e) {
+        console.error('openSharedList error', e);
+    }
+}
+
+async function mergeSharedTokenToMyList(token) {
+    try {
+        const resp = await fetch(`/shared/list?token=${encodeURIComponent(token)}`);
+        if (!resp.ok) { showNotification('No se pudo cargar la lista'); return; }
+        const data = await resp.json();
+        const list = data.list || [];
+        let added = 0;
+        for (const it of list) {
+            const pid = String(it.id || it.name || it.display_name || Math.random());
+            if (shoppingList.some(i => String(i.id) === pid)) continue;
+            shoppingList.push({ id: pid, name: it.name||it.display_name||it.nombre||pid, quantity: it.quantity||1, checked:false, thumbnail: it.thumbnail||'' , price: it.price||0 });
+            added++;
+        }
+        if (added>0) { saveShoppingList(); renderShoppingList(); updateShoppingListCount(); }
+        showNotification(`✅ ${added} productos añadidos a tu lista`);
+    } catch (e) { console.error('mergeSharedTokenToMyList', e); showNotification('Error añadiendo lista'); }
+}
+
+async function addSharedItemToMyList(token, item) {
+    // add to my shopping list locally
+    const it = typeof item === 'string' ? JSON.parse(item) : item;
+    const pid = String(it.id || it.name || it.display_name || Math.random());
+    if (shoppingList.some(i => String(i.id) === pid)) {
+        showNotification('Producto ya en tu lista');
+        return;
+    }
+    shoppingList.push({ id: pid, name: it.name||it.display_name||it.nombre||pid, quantity: it.quantity||1, checked:false, thumbnail: it.thumbnail||'' , price: it.price||0 });
+    saveShoppingList(); renderShoppingList(); updateShoppingListCount();
+    showNotification('Añadido a tu lista');
+}
+
+async function removeSharedItem(token, itemId) {
+    try {
+        const resp = await fetch('/api/shared/list/remove-item', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-User': currentUser },
+            body: JSON.stringify({ token, itemId })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showNotification('Producto eliminado de la lista compartida');
+            loadUserSharedReceived();
+        } else showNotification(data.error || 'Error');
+    } catch (e) { console.error(e); showNotification('Error'); }
+}
+
+async function dismissReceivedToken(token) {
+    try {
+        const resp = await fetch('/api/user/dismiss-received', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-User': currentUser }, body: JSON.stringify({ token }) });
+        const data = await resp.json();
+        if (data.success) { showNotification('Compartido descartado'); loadUserSharedReceived(); }
+    } catch (e) { console.error(e); }
+}
+
 
 async function loadUserTickets() {
     try {

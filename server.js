@@ -2019,6 +2019,159 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // API: Get lists shared to the authenticated user (tokens inbox)
+    if (req.url === '/api/user/shared-received' && req.method === 'GET') {
+        const username = getAuthenticatedUsername(req);
+        if (!username || !usersCache[username]) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
+            return;
+        }
+
+        const inbox = usersCache[username].sharedReceived || [];
+        // Map tokens to preview data when available
+        const mapped = inbox.map(entry => {
+            const token = entry.token;
+            const listEntry = sharedLists[token];
+            return {
+                token,
+                from: entry.from || listEntry?.from || null,
+                createdAt: entry.createdAt,
+                preview: listEntry ? { count: (listEntry.list || []).length, items: (listEntry.list || []).slice(0,6) } : null
+            };
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ received: mapped }));
+        return;
+    }
+
+    // API: Add item to a shared list (must be recipient)
+    if (req.url === '/api/shared/list/add-item' && req.method === 'POST') {
+        const username = getAuthenticatedUsername(req);
+        if (!username || !usersCache[username]) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
+            return;
+        }
+
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { token, item } = JSON.parse(body || '{}');
+                if (!token || !item) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'token and item required' }));
+                    return;
+                }
+
+                const inbox = usersCache[username].sharedReceived || [];
+                if (!inbox.some(e => e.token === token)) {
+                    res.writeHead(403, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'No tienes permiso sobre este token' }));
+                    return;
+                }
+
+                if (!sharedLists[token]) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'token not found' }));
+                    return;
+                }
+
+                sharedLists[token].list = sharedLists[token].list || [];
+                sharedLists[token].list.push(item);
+                saveSharedLists();
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, list: sharedLists[token].list }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid body' }));
+            }
+        });
+        return;
+    }
+
+    // API: Remove item from a shared list (must be recipient)
+    if (req.url === '/api/shared/list/remove-item' && req.method === 'POST') {
+        const username = getAuthenticatedUsername(req);
+        if (!username || !usersCache[username]) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
+            return;
+        }
+
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { token, itemId } = JSON.parse(body || '{}');
+                if (!token || typeof itemId === 'undefined') {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'token and itemId required' }));
+                    return;
+                }
+
+                const inbox = usersCache[username].sharedReceived || [];
+                if (!inbox.some(e => e.token === token)) {
+                    res.writeHead(403, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'No tienes permiso sobre este token' }));
+                    return;
+                }
+
+                if (!sharedLists[token]) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'token not found' }));
+                    return;
+                }
+
+                const beforeLen = (sharedLists[token].list || []).length;
+                sharedLists[token].list = (sharedLists[token].list || []).filter(i => String(i.id) !== String(itemId));
+                const afterLen = sharedLists[token].list.length;
+                if (afterLen < beforeLen) saveSharedLists();
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, list: sharedLists[token].list }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid body' }));
+            }
+        });
+        return;
+    }
+
+    // API: Dismiss a received token from user's inbox
+    if (req.url === '/api/user/dismiss-received' && req.method === 'POST') {
+        const username = getAuthenticatedUsername(req);
+        if (!username || !usersCache[username]) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
+            return;
+        }
+
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { token } = JSON.parse(body || '{}');
+                if (!token) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'token required' }));
+                    return;
+                }
+                usersCache[username].sharedReceived = (usersCache[username].sharedReceived || []).filter(e => e.token !== token);
+                saveUsers();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, received: usersCache[username].sharedReceived }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid body' }));
+            }
+        });
+        return;
+    }
+
     // API local - Categorías
     if (req.url === '/api/categories/' || req.url === '/api/categories') {
         if (categoriasCache) {
