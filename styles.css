@@ -3251,33 +3251,7 @@ body {
     align-items: stretch;
 }
 
-.btn-share-link {
-    padding: 12px 20px;
-    background: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-weight: 600;
-    transition: var(--transition);
-}
-
-.btn-share-link:hover {
-    background: var(--primary-dark);
-}
-
-.btn-share-as-token {
-    padding: 12px 20px;
-    background: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-weight: 600;
-    transition: var(--transition);
-}
-
-.btn-share-as-token:hover { background: var(--primary-dark); }
+/* Removed link/token share buttons - UI uses unified input + send */
 
 .share-to-user {
     flex: 1;

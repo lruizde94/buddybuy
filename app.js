@@ -2693,98 +2693,11 @@ function clearShoppingList() {
     }
 }
 
-function shareShoppingList() {
-    if (shoppingList.length === 0) {
-        showNotification('La lista está vacía');
-        return;
-    }
-    
-    // Encode shopping list in base64 for URL
-    const listData = shoppingList.map(item => ({
-        id: item.id,
-        name: item.name,
-        thumbnail: item.thumbnail,
-        packaging: item.packaging,
-        price: item.price,
-        isWeight: item.isWeight,
-        quantity: item.quantity
-    }));
-    
-    const encoded = btoa(encodeURIComponent(JSON.stringify(listData)));
-    const shareUrl = `${window.location.origin}${window.location.pathname}?lista=${encoded}`;
-    
-    // Try to use Web Share API first
-    if (navigator.share) {
-        navigator.share({
-            title: 'Mi Lista de la Compra - Mercadona',
-            text: `Lista con ${shoppingList.length} productos (${document.getElementById('shoppingListTotal').textContent} aprox.)`,
-            url: shareUrl
-        }).catch(() => {
-            copyShareLink(shareUrl);
-        });
-    } else {
-        copyShareLink(shareUrl);
-    }
-}
+// shareShoppingList removed: sharing via link/token disabled in UI
 
-// Share shopping list by creating a server token and sending it to another user (like recipes)
-async function shareShoppingListAsToken() {
-    if (!currentUser) {
-        showNotification('Debes iniciar sesión para compartir');
-        showLoginModal();
-        return;
-    }
+// shareShoppingListAsToken removed: token-based sharing option removed from UI
 
-    if (!shoppingList || shoppingList.length === 0) {
-        showNotification('La lista está vacía');
-        return;
-    }
-
-    try {
-        const resp = await fetch('/api/share-shopping-list', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-User': currentUser },
-            body: JSON.stringify({ list: shoppingList })
-        });
-        if (!resp.ok) throw new Error('Error creando enlace');
-        const data = await resp.json();
-        const token = data.token;
-
-        const sendTo = prompt('Comparte esta lista con otro usuario (escribe su nombre de usuario):', '');
-        if (!sendTo || !sendTo.trim()) {
-            showNotification('Compartir cancelado');
-            return;
-        }
-
-        try {
-            const sresp = await fetch('/api/share-to-user', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token, toUser: sendTo.trim(), fromUser: currentUser })
-            });
-            if (sresp.ok) showNotification('✅ Lista compartida con ' + sendTo.trim());
-            else {
-                const err = await sresp.json().catch(() => ({}));
-                showNotification('No se pudo enviar al usuario: ' + (err.error || sresp.statusText));
-            }
-        } catch (e) {
-            console.error('Error enviando al usuario', e);
-            showNotification('Error enviando al usuario');
-        }
-    } catch (e) {
-        console.error('shareShoppingListAsToken error', e);
-        showNotification('Error compartiendo la lista');
-    }
-}
-
-function copyShareLink(url) {
-    navigator.clipboard.writeText(url).then(() => {
-        showNotification('¡Enlace copiado al portapapeles!');
-    }).catch(() => {
-        // Fallback: show in prompt
-        prompt('Copia este enlace para compartir:', url);
-    });
-}
+// copyShareLink removed: link sharing disabled in UI
 
 function loadSharedList() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -2921,9 +2834,17 @@ function showShareOptions() {
         shareOptions.classList.toggle('visible');
         const isVisible = shareOptions.classList.contains('visible');
         shareOptions.style.display = isVisible ? 'block' : 'none';
+        // (debug banner removed)
         // update aria-expanded on the share button for accessibility
         const btn = document.getElementById('btnShareList') || document.querySelector('.btn-share-list');
         if (btn) btn.setAttribute('aria-expanded', isVisible);
+        // If share options opened, focus the user input for quick sending
+        if (isVisible) {
+            const inp = document.getElementById('shareToUserInput');
+            if (inp) {
+                try { inp.focus(); inp.select(); } catch(e) {}
+            }
+        }
     } catch (e) {
         console.error('Error in showShareOptions', e);
     }
@@ -2942,6 +2863,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     } catch (e) {
         console.error('Error attaching share button listener', e);
+    }
+});
+
+// Delegated click handler as a fallback to ensure share toggle always runs
+document.addEventListener('click', (e) => {
+    try {
+        const btn = e.target.closest && e.target.closest('.btn-share-list');
+        if (btn) {
+            e.preventDefault();
+            showShareOptions();
+        }
+    } catch (err) {
+        // ignore
     }
 });
 
@@ -3571,7 +3505,6 @@ function renderUserReceivedShares(received) {
                     ${itemsHtml}
                 </div>
                 <div style="margin-top:8px; display:flex; gap:8px;">
-                    <button onclick="openSharedList('${r.token}')">Ver completa</button>
                     <button onclick="mergeSharedTokenToMyList('${r.token}')">Añadir todo a mi lista</button>
                     <button onclick="dismissReceivedToken('${r.token}')">Descartar</button>
                 </div>
@@ -3580,25 +3513,7 @@ function renderUserReceivedShares(received) {
     }).join('');
 }
 
-async function openSharedList(token) {
-    try {
-        const resp = await fetch(`/shared/list?token=${encodeURIComponent(token)}`);
-        if (!resp.ok) {
-            showNotification('No se pudo cargar la lista compartida');
-            return;
-        }
-        const data = await resp.json();
-        // Show a quick modal with items
-        const list = data.list || [];
-        const html = list.map(it => `<div style="display:flex;justify-content:space-between;padding:6px 0;">${it.name||it.display_name||it.id} <button onclick=\"addToShoppingList(${JSON.stringify(it).replace(/"/g,'&quot;')})\">➕</button></div>`).join('');
-        const prev = menuContent.innerHTML;
-        menuContent.innerHTML = `<div style="max-height:60vh;overflow:auto;padding:12px;">${html}</div>`;
-        document.getElementById('menuModal').classList.add('active');
-        setTimeout(() => { menuContent.innerHTML = prev; }, 5000);
-    } catch (e) {
-        console.error('openSharedList error', e);
-    }
-}
+// full-view of shared lists removed per user request
 
 async function mergeSharedTokenToMyList(token) {
     try {

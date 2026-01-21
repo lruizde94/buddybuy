@@ -1945,7 +1945,8 @@ const server = http.createServer((req, res) => {
                     res.end(JSON.stringify({ error: 'token and toUser required' }));
                     return;
                 }
-                if (!sharedRecipes[token]) {
+                // Accept tokens that refer to shared recipes or shared shopping lists
+                if (!sharedRecipes[token] && !sharedLists[token]) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'token not found' }));
                     return;
