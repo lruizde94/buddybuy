@@ -171,6 +171,7 @@ const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 const ASSOCIATIONS_FILE = path.join(DATA_DIR, 'product_associations.json');
 const PRICE_HISTORY_FILE = path.join(DATA_DIR, 'price_history.json');
 const SHARED_RECIPES_FILE = path.join(DATA_DIR, 'shared_recipes.json');
+const SHARED_LISTS_FILE = path.join(DATA_DIR, 'shared_lists.json');
 
 // Cache de datos en memoria
 let productosCache = null;
@@ -180,6 +181,7 @@ let sessionsCache = {};
 let associationsCache = {}; // { "normalized_ticket_item": { productId: "id", originalName: "name" } }
 let priceHistory = {}; // { productId: [ { date: 'YYYY-MM-DD', price: 1.23 }, ... ] }
 let sharedRecipes = {}; // { token: { recipe, createdAt, expiresAt } }
+let sharedLists = {}; // { token: { listItems, createdAt, expiresAt } }
 // Search index and query cache for faster lookups
 let searchIndex = null; // { tokenMap: Map(token -> Set(productIndex)), products: Array(products), normNames: Array }
 const queryCache = new Map(); // simple LRU-like cache
@@ -391,6 +393,15 @@ function saveSharedRecipes() {
         fs.writeFileSync(SHARED_RECIPES_FILE, JSON.stringify(sharedRecipes, null, 2));
     } catch (error) {
         console.error('Error guardando shared recipes:', error);
+    }
+}
+
+function saveSharedLists() {
+    try {
+        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(SHARED_LISTS_FILE, JSON.stringify(sharedLists, null, 2));
+    } catch (error) {
+        console.error('Error guardando shared lists:', error);
     }
 }
 
@@ -1880,6 +1891,43 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // Create a shareable shopping list link (expires in 30 days)
+    if (req.url === '/api/share-shopping-list' && req.method === 'POST') {
+        const username = getAuthenticatedUsername(req);
+        if (!username) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Usuario no autenticado' }));
+            return;
+        }
+
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const payload = JSON.parse(body || '{}');
+                // If client provides explicit list, use it; otherwise use user's saved shoppingList
+                const listItems = Array.isArray(payload.list) ? payload.list : (usersCache[username].shoppingList || []);
+                if (!Array.isArray(listItems) || listItems.length === 0) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Lista vacía o inválida' }));
+                    return;
+                }
+                const token = crypto.randomBytes(16).toString('hex');
+                const createdAt = new Date().toISOString();
+                const expiresAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)).toISOString();
+                sharedLists[token] = { list: listItems, createdAt, expiresAt, from: username };
+                saveSharedLists();
+                const url = `/shared/list?token=${token}`;
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ token, url, expiresAt }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid body' }));
+            }
+        });
+        return;
+    }
+
     // Send an existing share token to another user (adds to recipient inbox)
     if (req.url === '/api/share-to-user' && req.method === 'POST') {
         let body = '';
@@ -1941,6 +1989,33 @@ const server = http.createServer((req, res) => {
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ recipe: entry.recipe, createdAt: entry.createdAt, expiresAt: entry.expiresAt }));
+        return;
+    }
+
+    // Serve a shared shopping list by token
+    if (req.url.startsWith('/shared/list') && req.method === 'GET') {
+        const urlParams = new URLSearchParams(req.url.split('?')[1] || '');
+        const token = urlParams.get('token');
+        if (!token) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'token required' }));
+            return;
+        }
+        const entry = sharedLists[token];
+        if (!entry) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'not found' }));
+            return;
+        }
+        if (new Date() > new Date(entry.expiresAt)) {
+            delete sharedLists[token];
+            saveSharedLists();
+            res.writeHead(410, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'expired' }));
+            return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ list: entry.list, createdAt: entry.createdAt, expiresAt: entry.expiresAt, from: entry.from }));
         return;
     }
 

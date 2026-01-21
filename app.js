@@ -2727,6 +2727,56 @@ function shareShoppingList() {
     }
 }
 
+// Share shopping list by creating a server token and sending it to another user (like recipes)
+async function shareShoppingListAsToken() {
+    if (!currentUser) {
+        showNotification('Debes iniciar sesión para compartir');
+        showLoginModal();
+        return;
+    }
+
+    if (!shoppingList || shoppingList.length === 0) {
+        showNotification('La lista está vacía');
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/share-shopping-list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-User': currentUser },
+            body: JSON.stringify({ list: shoppingList })
+        });
+        if (!resp.ok) throw new Error('Error creando enlace');
+        const data = await resp.json();
+        const token = data.token;
+
+        const sendTo = prompt('Comparte esta lista con otro usuario (escribe su nombre de usuario):', '');
+        if (!sendTo || !sendTo.trim()) {
+            showNotification('Compartir cancelado');
+            return;
+        }
+
+        try {
+            const sresp = await fetch('/api/share-to-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, toUser: sendTo.trim(), fromUser: currentUser })
+            });
+            if (sresp.ok) showNotification('✅ Lista compartida con ' + sendTo.trim());
+            else {
+                const err = await sresp.json().catch(() => ({}));
+                showNotification('No se pudo enviar al usuario: ' + (err.error || sresp.statusText));
+            }
+        } catch (e) {
+            console.error('Error enviando al usuario', e);
+            showNotification('Error enviando al usuario');
+        }
+    } catch (e) {
+        console.error('shareShoppingListAsToken error', e);
+        showNotification('Error compartiendo la lista');
+    }
+}
+
 function copyShareLink(url) {
     navigator.clipboard.writeText(url).then(() => {
         showNotification('¡Enlace copiado al portapapeles!');

@@ -3261,6 +3261,19 @@ body {
     background: var(--primary-dark);
 }
 
+.btn-share-as-token {
+    padding: 12px 20px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+.btn-share-as-token:hover { background: var(--primary-dark); }
+
 .share-to-user {
     flex: 1;
     display: flex;
@@ -3552,6 +3565,28 @@ body {
 .btn-add-all-favorites:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+}
+
+/* Match shopping list "Añadir favoritos" button with other action buttons */
+.btn-add-favorites {
+    background: linear-gradient(135deg, #E91E63 0%, #C2185B 100%);
+    color: white;
+    border: none;
+    padding: 14px 20px;
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-add-favorites:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-add-favorites.added {
+    background: #4CAF50;
 }
 
 .btn-add-to-shopping {
