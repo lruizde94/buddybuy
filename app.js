@@ -2910,9 +2910,37 @@ function toggleShoppingItem(productId) {
 // ===== Share Functions =====
 
 function showShareOptions() {
-    const shareOptions = document.getElementById('shareOptions');
-    shareOptions.style.display = shareOptions.style.display === 'none' ? 'block' : 'none';
+    try {
+        console.log('showShareOptions called');
+        const shareOptions = document.getElementById('shareOptions');
+        if (!shareOptions) {
+            console.warn('shareOptions element not found');
+            return;
+        }
+        shareOptions.style.display = shareOptions.style.display === 'block' ? 'none' : 'block';
+        // update aria-expanded on the share button for accessibility
+        const btn = document.querySelector('.btn-share-list');
+        if (btn) btn.setAttribute('aria-expanded', shareOptions.style.display === 'block');
+    } catch (e) {
+        console.error('Error in showShareOptions', e);
+    }
 }
+
+// Ensure share button has a working listener (in case inline onclick is not executed)
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const btn = document.querySelector('.btn-share-list');
+        if (btn && !btn.dataset.listenerAttached) {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                showShareOptions();
+            });
+            btn.dataset.listenerAttached = '1';
+        }
+    } catch (e) {
+        console.error('Error attaching share button listener', e);
+    }
+});
 
 async function shareToUser() {
     if (!currentUser) {
