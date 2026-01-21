@@ -2917,10 +2917,13 @@ function showShareOptions() {
             console.warn('shareOptions element not found');
             return;
         }
-        shareOptions.style.display = shareOptions.style.display === 'block' ? 'none' : 'block';
+        // Toggle visible class and explicit display to override inline/style rules
+        shareOptions.classList.toggle('visible');
+        const isVisible = shareOptions.classList.contains('visible');
+        shareOptions.style.display = isVisible ? 'block' : 'none';
         // update aria-expanded on the share button for accessibility
-        const btn = document.querySelector('.btn-share-list');
-        if (btn) btn.setAttribute('aria-expanded', shareOptions.style.display === 'block');
+        const btn = document.getElementById('btnShareList') || document.querySelector('.btn-share-list');
+        if (btn) btn.setAttribute('aria-expanded', isVisible);
     } catch (e) {
         console.error('Error in showShareOptions', e);
     }
@@ -2929,7 +2932,7 @@ function showShareOptions() {
 // Ensure share button has a working listener (in case inline onclick is not executed)
 document.addEventListener('DOMContentLoaded', () => {
     try {
-        const btn = document.querySelector('.btn-share-list');
+        const btn = document.getElementById('btnShareList') || document.querySelector('.btn-share-list');
         if (btn && !btn.dataset.listenerAttached) {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();

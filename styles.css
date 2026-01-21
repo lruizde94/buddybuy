@@ -3240,6 +3240,11 @@ body {
     border-radius: var(--radius-md);
 }
 
+/* Visible state for share options (toggle via JS) */
+.share-options.visible {
+    display: block !important;
+}
+
 .share-option-row {
     display: flex;
     gap: 15px;
