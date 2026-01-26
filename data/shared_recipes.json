@@ -85,5 +85,29 @@
     },
     "createdAt": "2026-01-18T20:01:24.152Z",
     "expiresAt": "2026-02-17T20:01:24.152Z"
+  },
+  "649f1121de6d321b088158c0a3d09b31": {
+    "recipe": {
+      "name": "Torrezno crujiente con salsa de queso batido",
+      "time": "20 min",
+      "difficulty": "Fácil",
+      "servings": "2 personas",
+      "ingredients": [
+        "200g de torrezno precocinado",
+        "100g de queso fresco batido desnatado"
+      ],
+      "steps": [
+        "Calentar el torrezno en una sartén a fuego medio hasta que esté crujiente.",
+        "Servir el torrezno con el queso fresco batido por encima."
+      ],
+      "nutrition": {
+        "kcal_per_100g": 250,
+        "fat_g": 20,
+        "carbs_g": 1,
+        "protein_g": 15
+      }
+    },
+    "createdAt": "2026-01-21T17:31:15.836Z",
+    "expiresAt": "2026-02-20T17:31:15.836Z"
   }
 }

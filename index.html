@@ -131,6 +131,12 @@
     <!-- Toggle Ingredients Panel Button -->
     <!-- Floating Controls (centered group) -->
     <div id="floatingControls">
+        <!-- Shopping List Button -->
+        <button class="shopping-list-toggle" id="shoppingListToggle" onclick="showShoppingListModal()">
+            <span>📋</span>
+            <span class="shopping-list-count" id="shoppingListCount">0</span>
+        </button>
+
         <!-- Toggle Ingredients Panel Button -->
         <button class="ingredients-toggle" id="ingredientsToggle">
             <span>🥗</span>
@@ -140,23 +146,18 @@
         <!-- Favorites Button -->
         <button class="favorites-toggle" id="favoritesToggle" onclick="showFavoritesModal()">
             <span>⭐</span>
-            <span class="favorites-count" id="favoritesCount" style="display: none;">0</span>
+            <span class="favorites-count" id="favoritesCount">0</span>
         </button>
 
         <!-- User Favorites Button -->
-        <button class="user-favorites-toggle" id="userFavoritesToggle" onclick="showUserFavoritesCategory()" style="display: none;">
+        <button class="user-favorites-toggle" id="userFavoritesToggle" onclick="showUserFavoritesCategory()">
             <span>❤️</span>
-            <span class="user-favorites-count" id="userFavoritesCount" style="display: none;">0</span>
-        </button>
-        <!-- Ticket Upload Button -->
-        <button class="ticket-toggle" id="ticketToggle" onclick="showTicketModal()" style="display: none;">
-            <span>🧾</span>
+            <span class="user-favorites-count" id="userFavoritesCount">0</span>
         </button>
 
-        <!-- Shopping List Button -->
-        <button class="shopping-list-toggle" id="shoppingListToggle" onclick="showShoppingListModal()" style="display: none;">
-            <span>📋</span>
-            <span class="shopping-list-count" id="shoppingListCount" style="display: none;">0</span>
+        <!-- Ticket Upload Button -->
+        <button class="ticket-toggle" id="ticketToggle" onclick="showTicketModal()">
+            <span>🧾</span>
         </button>
     </div>
 

@@ -1,0 +1,410 @@
+{
+  "545fde0be90a20e2fc8ef3bb4df3e760": {
+    "list": [
+      {
+        "id": "3497",
+        "name": "Arreglo para puchero vacuno, cerdo y pollo",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/876a3e52b23c6ad5e1aeafec3c2af206.jpg?fit=crop&h=300&w=300",
+        "price": 7.22,
+        "bulkPrice": 6.5,
+        "isWeight": false,
+        "packaging": "Bandeja",
+        "sizeFormat": "kg"
+      },
+      {
+        "id": "21549",
+        "name": "Torrezno precocinado Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/5108f6b6facdbfc57ce54d4f4d9969d1.jpg?fit=crop&h=300&w=300",
+        "price": 7.35,
+        "bulkPrice": 17.5,
+        "isWeight": false,
+        "packaging": "Bandeja",
+        "sizeFormat": "kg"
+      },
+      {
+        "id": "51071",
+        "name": "Queso fresco batido desnatado 0% MG Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/d2f12f4f6b2de080b5aeebc8aa1a5e46.jpg?fit=crop&h=300&w=300",
+        "price": 1.1,
+        "bulkPrice": 2.2,
+        "isWeight": false,
+        "packaging": "Tarrina",
+        "sizeFormat": "kg"
+      },
+      {
+        "id": "10199",
+        "name": "Nata ligera para cocinar Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/a889e74c8124bd110a748bc3ac8df440.jpg?fit=crop&h=300&w=300",
+        "price": 1.85,
+        "bulkPrice": 3.08,
+        "isWeight": false,
+        "packaging": "Pack-3",
+        "sizeFormat": "l"
+      },
+      {
+        "id": "86397",
+        "name": "Detergente ropa jabón natural de Marsella Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/ce125c37c76010be23a65a2f588c076a.jpg?fit=crop&h=300&w=300",
+        "price": 3.4,
+        "bulkPrice": 1.13,
+        "isWeight": false,
+        "packaging": "Botella",
+        "sizeFormat": "l"
+      },
+      {
+        "id": "40404",
+        "name": "Detergente ropa Blanca y de Color Bosque Verde en gel concentrado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/d7d3cf05c5162a35ed107bc310f505a0.jpg?fit=crop&h=300&w=300",
+        "price": 3.35,
+        "bulkPrice": 4.14,
+        "isWeight": false,
+        "packaging": "Botella",
+        "sizeFormat": "l"
+      },
+      {
+        "id": "40537",
+        "name": "Detergente ropa de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/294613f06de31979a209314d0fe409d1.jpg?fit=crop&h=300&w=300",
+        "price": 4.4,
+        "bulkPrice": 1.47,
+        "isWeight": false,
+        "packaging": "Botella",
+        "sizeFormat": "l"
+      },
+      {
+        "id": "86400",
+        "name": "Detergente ropa Blanca y de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/425dec7ec4f37d38dfa1380f1e292637.jpg?fit=crop&h=300&w=300",
+        "price": 5.65,
+        "bulkPrice": 1.88,
+        "isWeight": false,
+        "packaging": "Botella",
+        "sizeFormat": "l"
+      },
+      {
+        "id": "47818",
+        "name": "Papel higiénico Doble Rollo Bosque Verde",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/2114d726e660470b9eea54e72125280a.jpg?fit=crop&h=300&w=300",
+        "price": 4.5,
+        "bulkPrice": 0.38,
+        "isWeight": false,
+        "packaging": "Paquete",
+        "sizeFormat": "ud"
+      }
+    ],
+    "createdAt": "2026-01-21T17:34:58.941Z",
+    "expiresAt": "2026-02-20T17:34:58.941Z",
+    "from": "luis"
+  },
+  "d1acd43cf1ecc60894eb5f20ef68d564": {
+    "list": [],
+    "createdAt": "2026-01-21T17:35:05.836Z",
+    "expiresAt": "2026-02-20T17:35:05.836Z",
+    "from": "luis"
+  },
+  "e43493bc67f084b33f6e13d797413889": {
+    "list": [
+      {
+        "id": "3497",
+        "name": "Arreglo para puchero vacuno, cerdo y pollo",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/876a3e52b23c6ad5e1aeafec3c2af206.jpg?fit=crop&h=300&w=300",
+        "price": 7.22
+      },
+      {
+        "id": "21549",
+        "name": "Torrezno precocinado Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/5108f6b6facdbfc57ce54d4f4d9969d1.jpg?fit=crop&h=300&w=300",
+        "price": 7.35
+      },
+      {
+        "id": "51071",
+        "name": "Queso fresco batido desnatado 0% MG Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/d2f12f4f6b2de080b5aeebc8aa1a5e46.jpg?fit=crop&h=300&w=300",
+        "price": 1.1
+      },
+      {
+        "id": "10199",
+        "name": "Nata ligera para cocinar Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/a889e74c8124bd110a748bc3ac8df440.jpg?fit=crop&h=300&w=300",
+        "price": 1.85
+      },
+      {
+        "id": "86397",
+        "name": "Detergente ropa jabón natural de Marsella Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/ce125c37c76010be23a65a2f588c076a.jpg?fit=crop&h=300&w=300",
+        "price": 3.4
+      },
+      {
+        "id": "40404",
+        "name": "Detergente ropa Blanca y de Color Bosque Verde en gel concentrado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/d7d3cf05c5162a35ed107bc310f505a0.jpg?fit=crop&h=300&w=300",
+        "price": 3.35
+      },
+      {
+        "id": "40537",
+        "name": "Detergente ropa de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/294613f06de31979a209314d0fe409d1.jpg?fit=crop&h=300&w=300",
+        "price": 4.4
+      },
+      {
+        "id": "86400",
+        "name": "Detergente ropa Blanca y de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/425dec7ec4f37d38dfa1380f1e292637.jpg?fit=crop&h=300&w=300",
+        "price": 5.65
+      },
+      {
+        "id": "47818",
+        "name": "Papel higiénico Doble Rollo Bosque Verde",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/2114d726e660470b9eea54e72125280a.jpg?fit=crop&h=300&w=300",
+        "price": 4.5
+      }
+    ],
+    "createdAt": "2026-01-21T17:37:44.900Z",
+    "expiresAt": "2026-02-20T17:37:44.900Z",
+    "from": "alba"
+  },
+  "a3702a8987c2892d5a73d2271bbb1f7b": {
+    "list": [
+      {
+        "id": "51071",
+        "name": "Queso fresco batido desnatado 0% MG Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/d2f12f4f6b2de080b5aeebc8aa1a5e46.jpg?fit=crop&h=300&w=300",
+        "price": 1.1,
+        "bulkPrice": 2.2,
+        "isWeight": false,
+        "packaging": "Tarrina",
+        "sizeFormat": "kg"
+      },
+      {
+        "id": "10199",
+        "name": "Nata ligera para cocinar Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/a889e74c8124bd110a748bc3ac8df440.jpg?fit=crop&h=300&w=300",
+        "price": 1.85,
+        "bulkPrice": 3.08,
+        "isWeight": false,
+        "packaging": "Pack-3",
+        "sizeFormat": "l"
+      },
+      {
+        "id": "40537",
+        "name": "Detergente ropa de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/294613f06de31979a209314d0fe409d1.jpg?fit=crop&h=300&w=300",
+        "price": 4.4,
+        "bulkPrice": 1.47,
+        "isWeight": false,
+        "packaging": "Botella",
+        "sizeFormat": "l"
+      },
+      {
+        "id": "86400",
+        "name": "Detergente ropa Blanca y de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/425dec7ec4f37d38dfa1380f1e292637.jpg?fit=crop&h=300&w=300",
+        "price": 5.65,
+        "bulkPrice": 1.88,
+        "isWeight": false,
+        "packaging": "Botella",
+        "sizeFormat": "l"
+      },
+      {
+        "id": "47818",
+        "name": "Papel higiénico Doble Rollo Bosque Verde",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/2114d726e660470b9eea54e72125280a.jpg?fit=crop&h=300&w=300",
+        "price": 4.5,
+        "bulkPrice": 0.38,
+        "isWeight": false,
+        "packaging": "Paquete",
+        "sizeFormat": "ud"
+      }
+    ],
+    "createdAt": "2026-01-21T17:38:40.652Z",
+    "expiresAt": "2026-02-20T17:38:40.652Z",
+    "from": "luis"
+  },
+  "3f84deb5d9e2a7c41d2c50c345ea098b": {
+    "list": [
+      {
+        "id": "51071",
+        "name": "Queso fresco batido desnatado 0% MG Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/d2f12f4f6b2de080b5aeebc8aa1a5e46.jpg?fit=crop&h=300&w=300",
+        "price": 1.1
+      },
+      {
+        "id": "10199",
+        "name": "Nata ligera para cocinar Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/a889e74c8124bd110a748bc3ac8df440.jpg?fit=crop&h=300&w=300",
+        "price": 1.85
+      },
+      {
+        "id": "40537",
+        "name": "Detergente ropa de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/294613f06de31979a209314d0fe409d1.jpg?fit=crop&h=300&w=300",
+        "price": 4.4
+      },
+      {
+        "id": "86400",
+        "name": "Detergente ropa Blanca y de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/425dec7ec4f37d38dfa1380f1e292637.jpg?fit=crop&h=300&w=300",
+        "price": 5.65
+      },
+      {
+        "id": "47818",
+        "name": "Papel higiénico Doble Rollo Bosque Verde",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/2114d726e660470b9eea54e72125280a.jpg?fit=crop&h=300&w=300",
+        "price": 4.5
+      }
+    ],
+    "createdAt": "2026-01-21T17:41:14.254Z",
+    "expiresAt": "2026-02-20T17:41:14.254Z",
+    "from": "alba"
+  },
+  "c2eeb4b57470ec8d66e519245c5f4a2e": {
+    "list": [
+      {
+        "id": "51071",
+        "name": "Queso fresco batido desnatado 0% MG Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/d2f12f4f6b2de080b5aeebc8aa1a5e46.jpg?fit=crop&h=300&w=300",
+        "price": 1.1
+      },
+      {
+        "id": "10199",
+        "name": "Nata ligera para cocinar Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/a889e74c8124bd110a748bc3ac8df440.jpg?fit=crop&h=300&w=300",
+        "price": 1.85
+      },
+      {
+        "id": "40537",
+        "name": "Detergente ropa de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/294613f06de31979a209314d0fe409d1.jpg?fit=crop&h=300&w=300",
+        "price": 4.4
+      },
+      {
+        "id": "86400",
+        "name": "Detergente ropa Blanca y de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/425dec7ec4f37d38dfa1380f1e292637.jpg?fit=crop&h=300&w=300",
+        "price": 5.65
+      },
+      {
+        "id": "47818",
+        "name": "Papel higiénico Doble Rollo Bosque Verde",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/2114d726e660470b9eea54e72125280a.jpg?fit=crop&h=300&w=300",
+        "price": 4.5
+      }
+    ],
+    "createdAt": "2026-01-21T17:44:09.778Z",
+    "expiresAt": "2026-02-20T17:44:09.778Z",
+    "from": "alba"
+  },
+  "7b4cf959252d8e3780ce8f0cdab81a9e": {
+    "list": [
+      {
+        "id": "51071",
+        "name": "Queso fresco batido desnatado 0% MG Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/d2f12f4f6b2de080b5aeebc8aa1a5e46.jpg?fit=crop&h=300&w=300",
+        "price": 1.1
+      },
+      {
+        "id": "10199",
+        "name": "Nata ligera para cocinar Hacendado",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/a889e74c8124bd110a748bc3ac8df440.jpg?fit=crop&h=300&w=300",
+        "price": 1.85
+      },
+      {
+        "id": "40537",
+        "name": "Detergente ropa de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/294613f06de31979a209314d0fe409d1.jpg?fit=crop&h=300&w=300",
+        "price": 4.4
+      },
+      {
+        "id": "86400",
+        "name": "Detergente ropa Blanca y de Color Bosque Verde líquido",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/425dec7ec4f37d38dfa1380f1e292637.jpg?fit=crop&h=300&w=300",
+        "price": 5.65
+      },
+      {
+        "id": "47818",
+        "name": "Papel higiénico Doble Rollo Bosque Verde",
+        "quantity": 1,
+        "checked": false,
+        "thumbnail": "https://prod-mercadona.imgix.net/images/2114d726e660470b9eea54e72125280a.jpg?fit=crop&h=300&w=300",
+        "price": 4.5
+      }
+    ],
+    "createdAt": "2026-01-21T17:44:14.108Z",
+    "expiresAt": "2026-02-20T17:44:14.108Z",
+    "from": "alba"
+  }
+}

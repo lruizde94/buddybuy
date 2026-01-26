@@ -1,0 +1,11 @@
+:root{ --bg:#fff; --text:#222; --accent:#2196F3 }
+body{ font-family: Inter, system-ui, Arial; margin:16px; color:var(--text); background:var(--bg) }
+.app-header{ margin-bottom:16px }
+.shopping-list{ max-width:760px; margin:0 auto; background:#fafafa; padding:16px; border-radius:8px }
+.shopping-controls{ display:flex; gap:8px; margin-bottom:12px }
+.shopping-controls input{ flex:1; padding:8px }
+.shopping-items .empty{ padding:40px; text-align:center; color:#666 }
+.shopping-item{ display:flex; gap:10px; align-items:center; padding:8px; border-bottom:1px solid #eee }
+.shopping-item.done .item-name{ text-decoration:line-through; color:#999 }
+.item-main{ display:flex; justify-content:space-between; align-items:center; flex:1 }
+.item-controls input{ width:64px; margin-right:8px }

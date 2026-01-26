@@ -1,5 +1,6 @@
 /* ===== Variables CSS ===== */
 :root {
+    /* Colores principales */
     --primary-color: #00a650;
     --primary-dark: #008c44;
     --primary-light: #e8f5e9;
@@ -11,19 +12,40 @@
     --background: #f8f9fa;
     --white: #ffffff;
     --border-color: #e9ecef;
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
-    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
-    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+
+    /* Sombras más sutiles y profesionales */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16);
     --shadow-colored: 0 4px 16px rgba(0, 166, 80, 0.2);
-    --radius-sm: 10px;
-    --radius-md: 14px;
-    --radius-lg: 20px;
-    --radius-xl: 28px;
-    --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Radios de borde modernos */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+
+    /* Transiciones suaves */
+    --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-fast: all 0.15s ease;
+    --transition-slow: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Layout */
     --sidebar-width: 280px;
     --header-height: 70px;
+
+    /* Touch targets y espaciado */
+    --touch-target-min: 44px;
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+
+    /* Safe areas */
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-top: env(safe-area-inset-top, 0px);
 }
 
 /* ===== Reset & Base ===== */
@@ -52,6 +74,40 @@ body {
     max-width: 1400px;
     margin: 0 auto;
     padding: 0 20px;
+}
+
+/* ===== Accesibilidad ===== */
+/* Focus visible para navegación por teclado */
+:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Quitar outline en interacción con mouse */
+:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* Inputs con font-size 16px para evitar zoom en iOS */
+input[type="text"],
+input[type="email"],
+input[type="search"],
+input[type="password"],
+textarea,
+select {
+    font-size: 16px;
+}
+
+/* Reducir movimiento para usuarios que lo prefieren */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 /* ===== User Bar ===== */
@@ -827,6 +883,94 @@ body {
     background: var(--primary-dark);
 }
 
+/* Modal sizes */
+.modal-small .modal-content { max-width: 380px; }
+.modal-medium .modal-content { max-width: 500px; }
+.modal-large .modal-content { max-width: 700px; }
+.modal-xlarge .modal-content { max-width: 900px; }
+
+/* ===== Modal Responsive - Bottom Sheet en Móvil ===== */
+@media (max-width: 768px) {
+    .modal {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .modal-content {
+        width: 100%;
+        max-width: 100%;
+        max-height: 92vh;
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        margin: 0;
+        transform: translateY(100%);
+    }
+
+    .modal.active .modal-content {
+        transform: translateY(0);
+    }
+
+    /* Indicador de arrastre */
+    .modal-content::before {
+        content: '';
+        display: block;
+        width: 40px;
+        height: 4px;
+        background: var(--border-color);
+        border-radius: 2px;
+        margin: 12px auto 8px;
+    }
+
+    .modal-body {
+        padding: 20px 16px;
+        padding-bottom: calc(20px + var(--safe-area-bottom));
+    }
+
+    .modal-close {
+        top: 16px;
+        right: 16px;
+        width: 36px;
+        height: 36px;
+    }
+
+    .modal-title {
+        font-size: 1.25rem;
+    }
+
+    .modal-price {
+        font-size: 1.6rem;
+    }
+
+    /* Modal sizes en móvil */
+    .modal-small .modal-content,
+    .modal-medium .modal-content,
+    .modal-large .modal-content,
+    .modal-xlarge .modal-content {
+        max-width: 100%;
+        max-height: 90vh;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-body {
+        padding: 16px 12px;
+        padding-bottom: calc(16px + var(--safe-area-bottom));
+    }
+
+    .modal-title {
+        font-size: 1.1rem;
+    }
+
+    .modal-price {
+        font-size: 1.4rem;
+    }
+
+    .modal-detail-row {
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px 0;
+    }
+}
+
 /* ===== Overlay ===== */
 .overlay {
     position: fixed;
@@ -910,86 +1054,134 @@ body {
 }
 
 @media (max-width: 768px) {
+    /* User bar compacta */
     .user-bar {
-        padding: 8px 0;
+        padding: 6px 0;
         font-size: 0.8rem;
     }
-    
+
+    .user-bar-content {
+        gap: 8px;
+    }
+
+    .login-prompt span {
+        display: none; /* Solo mostrar botón en móvil */
+    }
+
+    .btn-login, .btn-logout, .btn-profile {
+        padding: 6px 14px;
+        font-size: 0.75rem;
+    }
+
+    /* Header compacto */
     .header-content {
         flex-wrap: wrap;
         padding: 10px 0;
+        gap: 10px;
     }
-    
+
+    .logo {
+        gap: 8px;
+    }
+
     .logo h1 {
-        font-size: 1.15rem;
+        font-size: 1.1rem;
     }
-    
+
     .logo-icon {
-        font-size: 26px;
+        font-size: 24px;
     }
-    
+
+    .logo .tagline {
+        display: none; /* Ocultar tagline en móvil */
+    }
+
     .search-container {
         order: 3;
         max-width: 100%;
         width: 100%;
-        margin-top: 12px;
+        margin-top: 8px;
     }
-    
+
     .search-input {
         padding: 12px 48px 12px 16px;
-        font-size: 0.9rem;
+        font-size: 16px; /* Evita zoom en iOS */
+        border-radius: var(--radius-lg);
     }
-    
+
     .search-btn {
         width: 36px;
         height: 36px;
     }
-    
+
     .menu-toggle {
         display: flex;
+        padding: 8px;
     }
-    
+
     .layout {
         flex-direction: column;
     }
-    
+
     .main-content {
-        padding: 20px 0;
+        padding: 16px 0;
     }
-    
+
+    /* Sidebar drawer mejorado */
     .sidebar {
         position: fixed;
         top: 0;
-        left: -100%;
+        left: 0;
         width: 85%;
         max-width: 320px;
         height: 100vh;
-        max-height: 100vh;
+        height: 100dvh;
         border-radius: 0 var(--radius-xl) var(--radius-xl) 0;
-        z-index: 200;
-        transition: var(--transition);
-        box-shadow: var(--shadow-lg);
-        padding-bottom: 160px; /* leave space for floating controls on mobile */
+        z-index: 260;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: var(--shadow-xl);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
     }
-    
+
     .sidebar.active {
-        left: 0 !important;
-        transform: none !important;
-        visibility: visible !important;
-        display: block !important;
-        z-index: 260 !important; /* above overlay (150) so panel is visible */
+        transform: translateX(0);
     }
-    
+
+    .sidebar-header {
+        position: sticky;
+        top: 0;
+        background: var(--white);
+        z-index: 1;
+        padding: 16px;
+    }
+
     .close-sidebar {
         display: flex;
+        width: 40px;
+        height: 40px;
+        font-size: 1.5rem;
     }
-    
+
+    /* Touch targets más grandes */
+    .category-btn {
+        padding: 14px 16px;
+        min-height: 48px;
+    }
+
+    .subcategory-btn {
+        padding: 12px 16px;
+        min-height: 44px;
+    }
+
     .products-header {
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
     }
-    
+
     .products-header h2 {
         font-size: 1.25rem;
     }
@@ -1050,13 +1242,6 @@ body {
     }
 }
 
-@media (max-width: 480px) {
-    .container {
-        padding: 0 12px;
-    }
-    
-    .user-bar-content {
-
 /* Mobile-only close button inside cook modal when sidebar is hidden */
 .modal-close.mobile-only { display: none; }
 @media (max-width: 800px) {
@@ -1068,6 +1253,13 @@ body {
         z-index: 200;
     }
 }
+
+@media (max-width: 480px) {
+    .container {
+        padding: 0 12px;
+    }
+
+    .user-bar-content {
         font-size: 0.75rem;
     }
     
@@ -1423,52 +1615,7 @@ body {
 }
 .btn-secondary:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
 
-/* Toggle Button */
-.ingredients-toggle {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-90px);
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: var(--white);
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    box-shadow: var(--shadow-lg);
-    z-index: 92;
-    transition: var(--transition);
-}
-
-.ingredients-toggle:hover {
-    transform: scale(1.1);
-}
-
-.ingredients-toggle.hidden {
-    display: none;
-}
-
-.toggle-count {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #c62828;
-    color: var(--white);
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    font-size: 0.75rem;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
+/* Toggle count hidden state */
 .toggle-count.hidden {
     display: none;
 }
@@ -1827,47 +1974,6 @@ body {
     box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
-/* Favorites Toggle Button */
-.favorites-toggle {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(0);
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, #ffd700 0%, #ffb300 100%);
-    border: none;
-    border-radius: 50%;
-    box-shadow: var(--shadow-lg);
-    cursor: pointer;
-    z-index: 93;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition);
-    font-size: 1.5rem;
-}
-
-.favorites-toggle:hover {
-    transform: scale(1.1);
-}
-
-.favorites-count {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    width: 24px;
-    height: 24px;
-    background: var(--primary-color);
-    color: var(--white);
-    border-radius: 50%;
-    font-size: 0.8rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
 /* Favorites Modal Styles */
 .favorites-header {
     text-align: center;
@@ -2026,30 +2132,6 @@ body {
     transform: translateX(-50%) translateY(0);
 }
 
-/* Ticket Upload Button */
-.ticket-toggle {
-    position: fixed;
-    bottom: 20px;
-    right: 80px; /* Al lado del botón de ingredientes */
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
-    border: none;
-    border-radius: 50%;
-    box-shadow: var(--shadow-lg);
-    cursor: pointer;
-    z-index: 90;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition);
-    font-size: 1.5rem;
-}
-
-.ticket-toggle:hover {
-    transform: scale(1.1);
-}
-
 /* Modal Medium Size */
 .modal-medium {
     max-width: 550px;
@@ -2182,48 +2264,8 @@ body {
     .ticket-options .btn-option { width: 100%; }
     .ticket-options .option-buttons { flex-direction: column; gap: 12px; }
 }
-/* Centered floating container to hold buttons as a group */
-#floatingControls {
-    position: fixed;
-    left: 50%;
-    bottom: 40px;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 14px;
-    align-items: center;
-    z-index: 140;
-    pointer-events: auto;
-}
 
-/* Place buttons inside the container (override fixed placements) */
-.ingredients-toggle,
-.favorites-toggle,
-.user-favorites-toggle,
-.ticket-toggle,
-.shopping-list-toggle {
-    position: relative !important;
-    bottom: auto !important;
-    left: auto !important;
-    right: auto !important;
-    transform: none !important;
-    margin: 0 !important;
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.35rem;
-    border: none;
-    box-shadow: var(--shadow-lg);
-    cursor: pointer;
-    background: var(--white);
-}
-
-/* Slightly smaller on compact screens */
-@media (max-width: 480px) {
-    #floatingControls { gap: 10px; }
-}
+.btn-option {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2337,180 +2379,79 @@ body {
         left: 20px;
         bottom: 90px;
     }
-    
-    .ingredients-toggle {
-        width: 50px;
-        height: 50px;
-        font-size: 1.2rem;
-        right: 120px;
-        bottom: 20px;
-    }
-    
-    .favorites-toggle {
-        width: 50px;
-        height: 50px;
-        font-size: 1.2rem;
-        right: 240px;
-        bottom: 20px;
-    }
-
-/* Remove fixed placement -- use container centering instead */
-.user-favorites-toggle {
-    background: linear-gradient(135deg, #ff6b81 0%, #ff5252 100%);
 }
-.user-favorites-toggle:hover { transform: scale(1.05); }
 
-/* ===== Responsive: Mobile & Small Screens ===== */
+/* ===== Responsive: Ingredients Panel Mobile ===== */
 @media (max-width: 768px) {
-    /* Layout adjustments */
-    .layout {
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    /* Hide the left sidebar on small screens (mobile navigation via menu toggle)
-       and make products section take full width */
-    .sidebar {
-        display: none;
-    }
-
     .products-section {
-        padding-bottom: 160px; /* leave space for floating controls */
+        padding-bottom: 140px; /* espacio para floating controls */
     }
 
-    /* Ingredients panel becomes a bottom sheet by default */
+    /* Ingredients panel como bottom sheet */
     .ingredients-panel {
         width: calc(100% - 32px);
         left: 16px;
         right: 16px;
-        bottom: 180px;
+        bottom: 120px;
         transform: translateX(0);
-        border-radius: 12px;
+        border-radius: var(--radius-lg);
         max-height: 50vh;
     }
 
-    /* Collapsed circular icon state on mobile (small badge) */
+    .ingredients-panel.active {
+        transform: translateX(0);
+    }
+
     .ingredients-panel.collapsed {
-        width: 64px;
-        height: 64px;
-        bottom: 170px;
+        width: 56px;
+        height: 56px;
+        bottom: 100px;
         left: auto;
         right: 16px;
         border-radius: 50%;
         padding: 8px;
     }
 
-    .ingredients-panel.collapsed .ingredients-header {
-        align-items: center;
-    }
-
-    /* Floating buttons: smaller and closer together, centered */
-    .ingredients-toggle, .favorites-toggle, .user-favorites-toggle {
-        width: 52px;
-        height: 52px;
-        font-size: 1.15rem;
-    }
-
-    .ingredients-toggle { transform: translateX(-64px); }
-    .favorites-toggle { transform: translateX(0); }
-    .user-favorites-toggle { transform: translateX(64px); }
-
     .ingredients-collapsed-icons img {
-        width: 22px;
-        height: 22px;
-        margin-left: 0;
+        width: 20px;
+        height: 20px;
     }
 }
 
 @media (max-width: 480px) {
-    /* Extra adjustments for very small screens */
+    /* Ajustes para pantallas muy pequeñas */
     .ingredients-panel {
-        bottom: 160px;
+        bottom: 100px;
         max-height: 55vh;
     }
 
-    .products-grid article.product-card {
-        width: 100%;
-        margin-bottom: 12px;
+    /* Ocultar panel colapsado en móvil (ya hay botón en floatingControls) */
+    .ingredients-panel.collapsed {
+        display: none !important;
     }
 
-    .search-container { max-width: 100%; }
-}
-    
-    .ticket-toggle {
-        width: 50px;
-        height: 50px;
-        font-size: 1.2rem;
-        right: 60px;
-        bottom: 20px;
+    .search-container {
+        max-width: 100%;
     }
-    
-    .shopping-list-toggle {
-        width: 50px;
-        height: 50px;
-        font-size: 1.2rem;
-        right: 180px;
-        bottom: 20px;
-    }
-    
+
     .option-buttons {
         grid-template-columns: 1fr;
     }
-    
+
     .recipe-image {
         height: 150px;
     }
-    
+
     .recipe-meta {
         gap: 10px;
     }
-    
+
     .recipe-meta span {
         font-size: 0.8rem;
     }
 }
 
 /* ===== Shopping List Styles ===== */
-.shopping-list-toggle {
-    position: fixed;
-    bottom: 20px;
-    right: 200px; /* Al lado de los otros botones */
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, #2196F3 0%, #1565C0 100%);
-    border: none;
-    border-radius: 50%;
-    box-shadow: var(--shadow-lg);
-    cursor: pointer;
-    z-index: 90;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition);
-    font-size: 1.5rem;
-}
-
-.shopping-list-toggle:hover {
-    transform: scale(1.1);
-}
-
-.shopping-list-count {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #f44336;
-    color: white;
-    font-size: 0.75rem;
-    font-weight: 600;
-    min-width: 22px;
-    height: 22px;
-    border-radius: 11px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 6px;
-}
-
 .shopping-list-header {
     text-align: center;
     padding-bottom: 20px;
@@ -3062,47 +3003,6 @@ body {
     text-transform: uppercase;
 }
 
-/* ===== User Favorites Button ===== */
-.user-favorites-toggle {
-    position: fixed;
-    bottom: 20px;
-    right: 320px; /* Junto a los otros botones */
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, #E91E63 0%, #C2185B 100%);
-    border: none;
-    border-radius: 50%;
-    box-shadow: var(--shadow-lg);
-    cursor: pointer;
-    z-index: 90;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition);
-    font-size: 1.5rem;
-}
-
-.user-favorites-toggle:hover {
-    transform: scale(1.1);
-}
-
-.user-favorites-count {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #ff9800;
-    color: white;
-    font-size: 0.75rem;
-    font-weight: 600;
-    min-width: 22px;
-    height: 22px;
-    border-radius: 11px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 6px;
-}
-
 /* ===== Product Favorite Button ===== */
 .btn-favorite-product {
     position: absolute;
@@ -3152,14 +3052,6 @@ body {
 @media (max-width: 768px) {
     .user-bar-content {
         justify-content: center;
-    }
-    
-    .user-favorites-toggle {
-        width: 50px;
-        height: 50px;
-        font-size: 1.2rem;
-        right: 300px;
-        bottom: 20px;
     }
 }
 
@@ -4624,161 +4516,191 @@ body {
     }
 }
 
-/* ===== Floating Controls: Normalize & Centered Group ===== */
-/* These rules help keep the floating action buttons centered, evenly spaced
-   and prevent overlapping on different screen sizes. They intentionally
-   override earlier per-button absolute placements. */
+/* ===== Floating Controls - Sistema Simplificado ===== */
 
-/* Base normalization for buttons (will be refined per-button below) */
-.ingredients-toggle,
-.favorites-toggle,
-.user-favorites-toggle,
-.ticket-toggle,
-.shopping-list-toggle {
+/* Contenedor principal de controles flotantes */
+#floatingControls {
     position: fixed;
-    bottom: 20px;
+    bottom: calc(24px + var(--safe-area-bottom));
     left: 50%;
-    margin: 0;
-    width: 64px;
-    height: 64px;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    z-index: 140;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Botones base dentro del contenedor */
+#floatingControls button {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
     border-radius: 50%;
+    border: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.16);
-    transition: transform 0.18s ease, box-shadow 0.18s ease;
-    z-index: 100;
-    pointer-events: auto;
+    font-size: 1.3rem;
+    cursor: pointer;
+    transition: var(--transition);
+    box-shadow: var(--shadow-sm);
 }
 
-/* By default hide protected actions (ticket, shopping list, favorites) until JS enables them for logged users */
-.ticket-toggle,
-.shopping-list-toggle,
-.favorites-toggle,
-.user-favorites-toggle,
-.ingredients-toggle {
-    display: none !important;
+#floatingControls button:hover {
+    transform: scale(1.08);
+    box-shadow: var(--shadow-md);
 }
 
-/* Hide generate menu button by default; JS will enable/show it for logged users */
-#generateMenu {
-    display: none !important;
+#floatingControls button:active {
+    transform: scale(0.95);
 }
 
-/* Position each control relative to center (fine-tune spacing here) */
-.ingredients-toggle { transform: translateX(-110px); z-index: 103; }
-.favorites-toggle { transform: translateX(0); z-index: 104; }
-.user-favorites-toggle { transform: translateX(110px); z-index: 102; }
-.ticket-toggle { transform: translateX(220px); z-index: 101; }
-.shopping-list-toggle { transform: translateX(-220px); z-index: 101; }
-
-/* Preserve translateX on hover while adding a subtle scale */
-.ingredients-toggle:hover { transform: translateX(-110px) scale(1.06); }
-.favorites-toggle:hover { transform: translateX(0) scale(1.06); }
-.user-favorites-toggle:hover { transform: translateX(110px) scale(1.06); }
-.ticket-toggle:hover { transform: translateX(220px) scale(1.06); }
-.shopping-list-toggle:hover { transform: translateX(-220px) scale(1.06); }
-
-/* Consistent font size / icon scale */
-.ingredients-toggle, .favorites-toggle, .user-favorites-toggle, .ticket-toggle, .shopping-list-toggle {
-    font-size: 1.45rem;
+/* Colores de cada botón */
+#floatingControls .shopping-list-toggle {
+    background: linear-gradient(135deg, #64B5F6 0%, #1E88E5 100%);
+    color: white;
 }
 
-/* Badges inside the buttons */
-.toggle-count, .favorites-count, .shopping-list-count, .user-favorites-count {
+#floatingControls .ingredients-toggle {
+    background: linear-gradient(135deg, #A5D6A7 0%, #4CAF50 100%);
+    color: white;
+}
+
+#floatingControls .favorites-toggle {
+    background: linear-gradient(135deg, #FFE082 0%, #FFC107 100%);
+    color: #5D4037;
+}
+
+#floatingControls .user-favorites-toggle {
+    background: linear-gradient(135deg, #F8BBD0 0%, #E91E63 100%);
+    color: white;
+}
+
+#floatingControls .ticket-toggle {
+    background: var(--white);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+/* Badges de contador */
+.toggle-count,
+.favorites-count,
+.shopping-list-count,
+.user-favorites-count {
     position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 22px;
-    height: 22px;
-    background: var(--primary-color);
+    top: -4px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    background: #EF5350;
     color: var(--white);
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    font-size: 0.75rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
     font-weight: 700;
+    border: 2px solid var(--white);
 }
 
-/* Responsive adjustments: reduce spacing and hide extras on very small screens */
-@media (max-width: 768px) {
-    .ingredients-toggle { transform: translateX(-84px); }
-    .favorites-toggle { transform: translateX(0); }
-    .user-favorites-toggle { transform: translateX(84px); }
-    .ticket-toggle { transform: translateX(168px); }
-    .shopping-list-toggle { transform: translateX(-168px); }
-    .ingredients-toggle, .favorites-toggle, .user-favorites-toggle, .ticket-toggle, .shopping-list-toggle { width: 56px; height: 56px; font-size: 1.2rem; }
+/* Ocultar badges cuando muestran 0 */
+.toggle-count:empty,
+.favorites-count:empty,
+.shopping-list-count:empty,
+.user-favorites-count:empty,
+.toggle-count[data-count="0"],
+.favorites-count[data-count="0"],
+.shopping-list-count[data-count="0"],
+.user-favorites-count[data-count="0"] {
+    display: none;
 }
 
-@media (max-width: 480px) {
-    .ingredients-toggle { transform: translateX(-64px); }
-    .favorites-toggle { transform: translateX(0); }
-    .user-favorites-toggle { transform: translateX(64px); }
-    .ticket-toggle { transform: translateX(128px); display: flex; z-index: 101; }
-    .shopping-list-toggle { transform: translateX(-128px); display: flex; z-index: 101; }
-    .ingredients-toggle, .favorites-toggle, .user-favorites-toggle, .ticket-toggle, .shopping-list-toggle { width: 52px; height: 52px; font-size: 1.1rem; }
+/* Ocultar botones fuera del contenedor por defecto */
+body > .ticket-toggle,
+body > .shopping-list-toggle,
+body > .favorites-toggle,
+body > .user-favorites-toggle,
+body > .ingredients-toggle {
+    display: none;
 }
 
-/* Override legacy fixed-placement rules and force buttons to live inside #floatingControls */
-#floatingControls .ingredients-toggle,
+#generateMenu {
+    display: none;
+}
+
+/* Asegurar que botones DENTRO de #floatingControls se muestren */
+#floatingControls .ticket-toggle,
+#floatingControls .shopping-list-toggle,
 #floatingControls .favorites-toggle,
 #floatingControls .user-favorites-toggle,
-#floatingControls .ticket-toggle,
-#floatingControls .shopping-list-toggle {
-    position: relative !important;
-    left: auto !important;
-    right: auto !important;
-    bottom: auto !important;
-    transform: none !important;
-    margin: 0 !important;
-    display: inline-flex !important;
-    z-index: 140 !important;
-}
-
-/* Ensure ticket and shopping list are visible inside the centered container */
-#floatingControls .ticket-toggle,
-#floatingControls .shopping-list-toggle {
-    display: inline-flex !important;
-    background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
-}
-
-/* Small spacing tweak so they don't touch the footer */
-#floatingControls { bottom: 56px; }
-
-/* Button color palette overrides requested by user */
-#floatingControls .ticket-toggle {
-    /* white background with soft border for ticket */
-    background: var(--white) !important;
-    color: var(--secondary-color) !important;
-    border: 1px solid var(--border-color) !important;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.06) !important;
-}
-
-#floatingControls .shopping-list-toggle {
-    /* blue gradient for shopping list */
-    background: linear-gradient(135deg, #90CAF9 0%, #1E88E5 100%) !important;
-    color: #fff !important;
-    border: none !important;
-}
-
-#floatingControls .favorites-toggle {
-    /* pastel yellow */
-    background: linear-gradient(135deg, #FFF8E1 0%, #FFE0B2 100%) !important;
-    color: var(--secondary-color) !important;
-    border: 1px solid rgba(0,0,0,0.04) !important;
-}
-
 #floatingControls .ingredients-toggle {
-    /* pastel mint */
-    background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%) !important;
-    color: var(--secondary-color) !important;
-    border: 1px solid rgba(0,0,0,0.04) !important;
+    display: flex;
 }
 
-#floatingControls .user-favorites-toggle {
-    /* pastel pink for user favorites */
-    background: linear-gradient(135deg, #FFEFF2 0%, #FFD1E0 100%) !important;
-    color: var(--secondary-color) !important;
-    border: 1px solid rgba(0,0,0,0.04) !important;
+/* Responsive: Tablet */
+@media (max-width: 768px) {
+    #floatingControls {
+        gap: 10px;
+        padding: 10px 14px;
+    }
+
+    #floatingControls button {
+        width: 48px;
+        height: 48px;
+        font-size: 1.2rem;
+    }
 }
+
+/* Responsive: Móvil pequeño */
+@media (max-width: 480px) {
+    #floatingControls {
+        width: calc(100% - 20px);
+        left: 10px;
+        right: 10px;
+        transform: none;
+        gap: 4px;
+        padding: 8px;
+        justify-content: space-between;
+    }
+
+    #floatingControls button {
+        width: 40px;
+        height: 40px;
+        font-size: 0.95rem;
+        flex-shrink: 0;
+    }
+
+    #floatingControls button:hover {
+        transform: none;
+    }
+
+    #floatingControls button:active {
+        transform: scale(0.92);
+    }
+
+    /* Badges más pequeños */
+    #floatingControls .toggle-count,
+    #floatingControls .favorites-count,
+    #floatingControls .shopping-list-count,
+    #floatingControls .user-favorites-count {
+        min-width: 14px;
+        height: 14px;
+        font-size: 0.55rem;
+        top: -2px;
+        right: -2px;
+        padding: 0 3px;
+        border-width: 1px;
+    }
+}
+
