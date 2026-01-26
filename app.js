@@ -753,8 +753,11 @@ function updateIngredientsUI() {
 }
 
 function toggleIngredientsPanel() {
-    ingredientsPanel.classList.toggle('active');
-    ingredientsToggle.classList.toggle('hidden');
+    // Siempre expandir el panel al pulsar el icono
+    ingredientsPanel.classList.add('active');
+    ingredientsPanel.classList.remove('collapsed');
+    ingredientsToggle.classList.add('hidden');
+    ingredientsCollapsed = false;
 }
 
 function showIngredientsPanel() {
