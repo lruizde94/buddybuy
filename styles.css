@@ -2425,9 +2425,9 @@ select {
         max-height: 55vh;
     }
 
-    /* Ocultar panel colapsado en móvil (ya hay botón en floatingControls) */
+    /* Antes se ocultaba el panel colapsado en móvil, pero ahora permitimos mostrarlo */
     .ingredients-panel.collapsed {
-        display: none !important;
+        display: inline-flex !important;
     }
 
     .search-container {
