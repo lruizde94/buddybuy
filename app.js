@@ -759,10 +759,9 @@ function toggleIngredientsPanel() {
 
 function showIngredientsPanel() {
     ingredientsPanel.classList.add('active');
-    ingredientsToggle.classList.add('hidden');
-    // when showing explicitly, expand the panel
-    ingredientsCollapsed = false;
     ingredientsPanel.classList.remove('collapsed');
+    ingredientsToggle.classList.add('hidden');
+    ingredientsCollapsed = false;
 }
 
 function hideIngredientsPanel() {
