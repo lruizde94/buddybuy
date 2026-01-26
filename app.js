@@ -2160,41 +2160,38 @@ function addProductToShoppingList(productId, productName, thumbnail) {
         return;
     }
     const existingItem = shoppingList.find(item => String(item.id) === String(productId));
-    
     if (existingItem) {
-        existingItem.quantity++;
-        showNotification(`${productName} (x${existingItem.quantity})`);
-    } else {
-        // Try to enrich with product details from currentProducts
-        const prod = currentProducts.find(p => String(p.id) === String(productId));
-        let price = 0;
-        let packaging = '';
-        let isWeight = false;
-        let sizeFormat = '';
-
-        if (prod) {
-            const priceInfo = prod.price_instructions || {};
-            price = priceInfo.unit_price || 0;
-            packaging = prod.packaging || '';
-            isWeight = priceInfo.selling_method === 2;
-            sizeFormat = priceInfo.size_format || '';
-        }
-
-        shoppingList.push({
-            id: productId,
-            name: productName,
-            quantity: 1,
-            checked: false,
-            thumbnail: thumbnail,
-            price: price,
-            bulkPrice: null,
-            isWeight: isWeight,
-            packaging: packaging,
-            sizeFormat: sizeFormat
-        });
-        showNotification(`📋 ${productName} añadido a la lista`);
+        showNotification('Este producto ya está en la lista');
+        return;
     }
-    
+    // Try to enrich with product details from currentProducts
+    const prod = currentProducts.find(p => String(p.id) === String(productId));
+    let price = 0;
+    let packaging = '';
+    let isWeight = false;
+    let sizeFormat = '';
+
+    if (prod) {
+        const priceInfo = prod.price_instructions || {};
+        price = priceInfo.unit_price || 0;
+        packaging = prod.packaging || '';
+        isWeight = priceInfo.selling_method === 2;
+        sizeFormat = priceInfo.size_format || '';
+    }
+
+    shoppingList.push({
+        id: productId,
+        name: productName,
+        quantity: 1,
+        checked: false,
+        thumbnail: thumbnail,
+        price: price,
+        bulkPrice: null,
+        isWeight: isWeight,
+        packaging: packaging,
+        sizeFormat: sizeFormat
+    });
+    showNotification(`📋 ${productName} añadido a la lista`);
     saveShoppingList();
     updateShoppingListCount();
 }
